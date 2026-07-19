@@ -28,7 +28,7 @@ jobs:
       - uses: mlugg/setup-zig@v2
 
       - name: Build & package
-        run: bash build.sh ${{ matrix.target }}
+        run: bash script/build.sh ${{ matrix.target }}
 
       - uses: actions/upload-artifact@v4
         with:
