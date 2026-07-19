@@ -1,0 +1,38 @@
+name: CI
+on: [push, pull_request]
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-linux-gnu@x86_64+baseline
+            os: ubuntu-latest
+          - target: aarch64-linux-gnu@aarch64+baseline
+            os: ubuntu-latest
+          - target: x86_64-windows-gnu@x86_64+baseline
+            os: ubuntu-latest
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: mlugg/setup-zig@v2
+
+      - name: Build & package
+        run: bash build.sh ${{ matrix.target }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: |
+            dist/
+            checksums.txt
