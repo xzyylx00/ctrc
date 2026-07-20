@@ -50,7 +50,7 @@ check_deps() {
 
 check_deps
 
-[ -n "$1" ] || exit 1
+[ -n "$1" ] || ( echo "$0 Please specify one target at least" && exit 1 )
 
 export SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct)"
 export LC_ALL=C.UTF-8
@@ -64,7 +64,7 @@ APP_NAME="$(basename "$(pwd)")"
 rm -rf build zig-out zig-cache
 mkdir -p build
 
-target=$1
+for target in $@; do
 
   triple="${target%%@*}"
   echo "==> Building ${target}"
@@ -87,6 +87,7 @@ target=$1
   cp LICENSE README.md "$stage/" 2>/dev/null || true
 
   rm -rf zig-out
+done
 
 # Packing
 rm -rf dist && mkdir -p dist
