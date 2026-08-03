@@ -170,6 +170,7 @@ const State = enum {
     string,
     string_backslash,
     char,
+    char_backslash,
     identifier,
     hash,
     comment,
@@ -454,10 +455,8 @@ pub fn next(lexer: *Lexer) Token {
                     const identifier = lexer.buffer[token.start..lexer.index];
                     if (Token.toKeyword(identifier)) |kind| {
                         token.kind = kind;
-                        continue :state .commit;
-                    } else {
-                        continue :state .commit;
                     }
+                    continue :state .commit;
                 },
             }
         },
@@ -466,30 +465,22 @@ pub fn next(lexer: *Lexer) Token {
             lexer.pos += 1;
             switch (lexer.buffer[lexer.index]) {
                 'a'...'z', 'A'...'Z', '_', '0'...'9' => continue :state .macro,
-                else => {
-                    continue :state .commit;
-                },
+                else => continue :state .commit,
             }
         },
         .string => {
             lexer.index += 1;
             lexer.pos += 1;
             switch (lexer.buffer[lexer.index]) {
-                0 => {
-                    continue :state .invalid;
-                },
-                '\n' => {
-                    continue :state .invalid;
-                },
+                0 => continue :state .invalid,
+                '\n' => continue :state .invalid,
                 '\\' => continue :state .string_backslash,
                 '"' => {
                     lexer.pos += 1;
                     lexer.index += 1;
                     continue :state .commit;
                 },
-                0x01...0x09, 0x0b...0x1f, 0x7f => {
-                    continue :state .invalid;
-                },
+                0x01...0x09, 0x0b...0x1f, 0x7f => continue :state .invalid,
                 else => continue :state .string,
             }
         },
@@ -497,12 +488,8 @@ pub fn next(lexer: *Lexer) Token {
             lexer.index += 1;
             lexer.pos += 1;
             switch (lexer.buffer[lexer.index]) {
-                0, '\n' => {
-                    continue :state .invalid;
-                },
-                0x01...0x09, 0x0b...0x1f, 0x7f => {
-                    continue :state .invalid;
-                },
+                0, '\n' => continue :state .invalid,
+                0x01...0x09, 0x0b...0x1f, 0x7f => continue :state .invalid,
                 else => continue :state .string,
             }
         },
@@ -510,24 +497,23 @@ pub fn next(lexer: *Lexer) Token {
             lexer.index += 1;
             lexer.pos += 1;
             switch (lexer.buffer[lexer.index]) {
-                0 => {
-                    if (lexer.index != lexer.buffer.len) {
-                        continue :state .invalid;
-                    } else {
-                        continue :state .invalid;
-                    }
-                },
-                '\n' => {
-                    continue :state .invalid;
-                },
+                0 => continue :state .invalid,
+                '\n' => continue :state .invalid,
+                '\\' => continue :state .char_backslash,
                 '\'' => {
                     lexer.index += 1;
                     lexer.pos += 1;
                     continue :state .commit;
                 },
-                0x01...0x09, 0x0b...0x1f, 0x7f => {
-                    continue :state .invalid;
-                },
+                0x01...0x09, 0x0b...0x1f, 0x7f => continue :state .invalid,
+                else => continue :state .char,
+            }
+        },
+        .char_backslash => {
+            lexer.index += 1;
+            lexer.pos += 1;
+            switch (lexer.buffer[lexer.index]) {
+                0, '\n', 0x01...0x09, 0x0b...0x1f, 0x7f => continue :state .invalid,
                 else => continue :state .char,
             }
         },
@@ -543,13 +529,9 @@ pub fn next(lexer: *Lexer) Token {
                         continue :state .commit;
                     }
                 },
-                '\n' => {
-                    continue :state .commit;
-                },
+                '\n' => continue :state .commit,
                 '\r' => continue :state .comment,
-                0x01...0x09, 0x0b...0x0c, 0x0e...0x1f, 0x7f => {
-                    continue :state .invalid;
-                },
+                0x01...0x09, 0x0b...0x0c, 0x0e...0x1f, 0x7f => continue :state .invalid,
                 else => continue :state .comment,
             }
         },
@@ -560,12 +542,8 @@ pub fn next(lexer: *Lexer) Token {
                 lexer.pos += 1;
                 continue :state .number_integer;
             },
-            'e', 'E', 'p', 'P' => {
-                continue :state .number_integer_exponent;
-            },
-            ',', ' ', ';', '\t', '\n', '\r' => {
-                continue :state .commit;
-            },
+            'e', 'E', 'p', 'P' => continue :state .number_integer_exponent,
+            ',', ' ', ';', '\t', '\n', '\r' => continue :state .commit,
             else => continue :state .invalid,
         },
         .number_integer_exponent => {
@@ -589,12 +567,7 @@ pub fn next(lexer: *Lexer) Token {
                     lexer.pos += 1;
                     continue :state .number_float;
                 },
-                'e', 'E', 'p', 'P' => {
-                    continue :state .number_float_exponent;
-                },
-                ',', ' ', ';', '\t', '\n', '\r' => {
-                    continue :state .commit;
-                },
+                'e', 'E', 'p', 'P' => continue :state .number_float_exponent,
                 else => continue :state .invalid,
             }
         },
@@ -606,12 +579,8 @@ pub fn next(lexer: *Lexer) Token {
                     lexer.pos += 1;
                     continue :state .number_float;
                 },
-                'e', 'E', 'p', 'P' => {
-                    continue :state .number_float_exponent;
-                },
-                ',', ' ', ';', '\t', '\n', '\r' => {
-                    continue :state .commit;
-                },
+                'e', 'E', 'p', 'P' => continue :state .number_float_exponent,
+                ',', ' ', ';', '\t', '\n', '\r' => continue :state .commit,
 
                 else => continue :state .invalid,
             }
