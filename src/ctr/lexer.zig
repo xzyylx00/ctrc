@@ -159,7 +159,7 @@ const Token = struct {
 
 const Lexer = @This();
 buffer: [:0]const u8,
-index: u32 = 0,
+index: u32 = undefined,
 pos: u32 = 1,
 line: u32 = 1,
 
@@ -186,6 +186,7 @@ const State = enum {
 pub fn init(string: [:0]const u8) Lexer {
     return Lexer{
         .buffer = string,
+        .index = if (std.mem.startsWith(u8, string, "\xEF\xBB\xBF")) 3 else 0,
     };
 }
 
@@ -562,7 +563,7 @@ pub fn next(lexer: *Lexer) Token {
             'e', 'E', 'p', 'P' => {
                 continue :state .number_integer_exponent;
             },
-            ',', ' ', ';' => {
+            ',', ' ', ';', '\t', '\n', '\r' => {
                 continue :state .commit;
             },
             else => continue :state .invalid,
@@ -591,6 +592,9 @@ pub fn next(lexer: *Lexer) Token {
                 'e', 'E', 'p', 'P' => {
                     continue :state .number_float_exponent;
                 },
+                ',', ' ', ';', '\t', '\n', '\r' => {
+                    continue :state .commit;
+                },
                 else => continue :state .invalid,
             }
         },
@@ -605,6 +609,10 @@ pub fn next(lexer: *Lexer) Token {
                 'e', 'E', 'p', 'P' => {
                     continue :state .number_float_exponent;
                 },
+                ',', ' ', ';', '\t', '\n', '\r' => {
+                    continue :state .commit;
+                },
+
                 else => continue :state .invalid,
             }
         },
