@@ -476,7 +476,6 @@ pub fn next(lexer: *Lexer) Token {
                 '\n' => continue :state .invalid,
                 '\\' => continue :state .string_backslash,
                 '"' => {
-                    lexer.pos += 1;
                     lexer.index += 1;
                     continue :state .commit;
                 },
