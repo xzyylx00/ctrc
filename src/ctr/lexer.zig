@@ -16,8 +16,8 @@
 
 const std = @import("std");
 
-const Token = struct {
-    const Kind = enum {
+pub const Token = struct {
+    pub const Kind = enum {
         keyword_in,
         keyword_out,
         keyword_inout,
@@ -25,11 +25,9 @@ const Token = struct {
         keyword_ref,
         keyword_match,
         keyword_function,
-        keyword_test,
         keyword_type,
         keyword_break,
         keyword_continue,
-        keyword_while,
         keyword_nil,
 
         colon,
@@ -131,9 +129,7 @@ const Token = struct {
             },
             's' => {},
             't' => {
-                if (std.mem.eql(u8, "test", string)) {
-                    return .keyword_test;
-                } else if (std.mem.eql(u8, "type", string)) {
+                if (std.mem.eql(u8, "type", string)) {
                     return .keyword_type;
                 }
             },
@@ -148,6 +144,24 @@ const Token = struct {
         }
 
         return null;
+    }
+
+    pub fn isKeyword(token: *const Token) bool {
+        switch (token.kind) {
+            .keyword_in,
+            .keyword_out,
+            .keyword_inout,
+            .keyword_ptr,
+            .keyword_ref,
+            .keyword_match,
+            .keyword_function,
+            .keyword_type,
+            .keyword_break,
+            .keyword_continue,
+            .keyword_nil, // to align
+            => return true,
+            else => return false,
+        }
     }
 
     kind: Kind,
@@ -599,6 +613,15 @@ pub fn next(lexer: *Lexer) Token {
     }
 
     // return token; // for Zig return check
+}
+
+pub fn peek(lexer: *const Lexer) ?Token {
+    var local_lexer: Lexer = lexer.*;
+    const token = local_lexer.next();
+    if (token.kind == .eof) {
+        return null;
+    }
+    return token;
 }
 
 pub fn dump(lexer: *Lexer, token: *const Token) void {
