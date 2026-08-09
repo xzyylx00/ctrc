@@ -9,6 +9,7 @@ in kkk = label: {
         };
         a
 };
-{
-        hello
+type ("AA") {
+        a,
+        a: a,
 }

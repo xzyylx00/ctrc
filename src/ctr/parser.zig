@@ -906,7 +906,7 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOf
         return null;
     }
 
-    peek_token = lexer.next();
+    peek_token = lexer.peek();
     if (peek_token) |_peek_token| {
         if (_peek_token.kind == .r_paren) {
             _ = lexer.next();
@@ -917,9 +917,9 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOf
         }
     }
 
-    peek_token = lexer.next();
+    peek_token = lexer.peek();
     if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .l_bracket) {
+        if (_peek_token.kind == .l_brace) {
             _ = lexer.next();
         } else {
             // XXX Error
@@ -963,9 +963,9 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOf
         }
     }
 
-    peek_token = lexer.next();
+    peek_token = lexer.peek();
     if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .r_bracket) {
+        if (_peek_token.kind == .r_brace) {
             _ = lexer.next();
         } else {
             // XXX Error
@@ -1016,9 +1016,23 @@ fn parseTypeEntry(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapac
         if (_peek_token.kind == .colon) {
             _ = lexer.next();
         } else {
-            // XXX Error
-            ast_node_array.free(type_entry_node_index) catch unreachable;
-            return null;
+            const type_entry_node = ASTNode{
+                .data = .{
+                    .type_entry = .{
+                        .expression = null,
+                        .name = .{
+                            .start = name_token.start,
+                            .end = name_token.end,
+                        },
+                        .next = null,
+                    },
+                },
+                .kind = .type_entry,
+            };
+
+            ast_node_array.set(type_entry_node_index, type_entry_node) catch unreachable;
+
+            return type_entry_node_index;
         }
     } else {
         // XXX Error
