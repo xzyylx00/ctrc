@@ -24,6 +24,7 @@ pub const Token = struct {
         keyword_ptr,
         keyword_ref,
         keyword_match,
+        keyword_case,
         keyword_function,
         keyword_type,
         keyword_break,
@@ -80,6 +81,8 @@ pub const Token = struct {
             'c' => {
                 if (std.mem.eql(u8, "continue", string)) {
                     return .keyword_continue;
+                } else if (std.mem.eql(u8, "case", string)) {
+                    return .keyword_case;
                 }
             },
             'd' => {},
@@ -206,6 +209,16 @@ pub fn init(string: [:0]const u8) Lexer {
 }
 
 pub fn next(lexer: *Lexer) Token {
+    if (lexer.buffer.len == lexer.index) {
+        return Token{
+            .kind = .eof,
+            .start = lexer.index,
+            .end = lexer.index,
+            .line = lexer.line,
+            .pos = lexer.pos,
+        };
+    }
+
     var token: Token = undefined;
 
     state: switch (State.start) {
@@ -622,6 +635,19 @@ pub fn peek(lexer: *const Lexer) ?Token {
         return null;
     }
     return token;
+}
+
+pub fn skipUntil(lexer: *Lexer, comptime until: []Token.Kind) void {
+    var local_lexer = lexer.*;
+    blk: while (true) {
+        const token = local_lexer.next();
+        inline for (until) |until_kind| {
+            if (token.kind == until_kind) {
+                break :blk;
+            }
+        }
+    }
+    lexer.* = local_lexer;
 }
 
 pub fn dump(lexer: *Lexer, token: *const Token) void {

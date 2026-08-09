@@ -1,0 +1,5 @@
+in std, inout b, out c = std();
+out test_ = function () { function_ };
+{
+        hello
+}
