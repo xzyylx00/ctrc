@@ -1,5 +1,14 @@
 in std, inout b, out c = std();
 out test_ = function () { function_ };
+in kkk = label: {
+        break kkk 1234;
+        continue aaa 5678;
+        inout #"match" = match(1) {
+                case a: 90,
+                case b: 100
+        };
+        a
+};
 {
         hello
 }

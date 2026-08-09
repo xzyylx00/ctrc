@@ -569,7 +569,7 @@ pub fn next(lexer: *Lexer) Token {
                 continue :state .number_integer;
             },
             'e', 'E', 'p', 'P' => continue :state .number_integer_exponent,
-            ',', ' ', ';', '\t', '\n', '\r' => continue :state .commit,
+            ',', ' ', ';', '\t', '\n', '\r', ')' => continue :state .commit,
             else => continue :state .invalid,
         },
         .number_integer_exponent => {
@@ -606,7 +606,7 @@ pub fn next(lexer: *Lexer) Token {
                     continue :state .number_float;
                 },
                 'e', 'E', 'p', 'P' => continue :state .number_float_exponent,
-                ',', ' ', ';', '\t', '\n', '\r' => continue :state .commit,
+                ',', ' ', ';', '\t', '\n', '\r', ')' => continue :state .commit,
 
                 else => continue :state .invalid,
             }

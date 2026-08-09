@@ -22,6 +22,7 @@ const Token = Lexer.Token;
 pub const ASTNode = struct {
     pub const Kind = enum {
         root,
+        label_expression,
         block_expression,
         statement,
         assignment_statement,
@@ -35,6 +36,8 @@ pub const ASTNode = struct {
         function_parameter,
         match_expression,
         match_case,
+        break_statement,
+        continue_statement,
         literal_expression,
         assignment_target,
     };
@@ -120,6 +123,8 @@ pub const ASTNode = struct {
         const StatementKind = enum {
             assignment,
             call,
+            @"break",
+            @"continue",
         };
 
         kind: StatementKind,
@@ -135,6 +140,7 @@ pub const ASTNode = struct {
             block,
             match,
             literal,
+            label,
         };
 
         kind: ExpressionKind,
@@ -163,13 +169,49 @@ pub const ASTNode = struct {
         next: ?usize,
     };
 
+    const LabelExpression = struct {
+        label: usize,
+        expression: usize,
+    };
+
+    const BreakStatement = struct {
+        const Name = struct {
+            start: usize,
+            end: usize,
+        };
+        name: Name,
+        expression: usize,
+    };
+
+    const ContinueStatement = struct {
+        const Name = struct {
+            start: usize,
+            end: usize,
+        };
+        name: Name,
+        expression: usize,
+    };
+
+    const MatchExpression = struct {
+        expression: usize,
+        case: ?usize,
+    };
+
+    const MatchCase = struct {
+        expression: usize, // Use label expression
+        next: ?usize,
+    };
+
     kind: Kind,
     data: union {
         root: Root,
+        label_expression: LabelExpression,
         block_expression: BlockExpression,
         statement: Statement,
         assignment_statement: AssignmentStatement,
         assignment_target: AssignmentTarget,
+        break_statement: BreakStatement,
+        continue_statement: ContinueStatement,
         call_statement: CallStatement,
         call_expression: CallExpression,
         call_parameter: CallParameter,
@@ -179,6 +221,8 @@ pub const ASTNode = struct {
         literal_expression: LiteralExpression,
         function_expression: FunctionExpression,
         function_parameter: FunctionParameter,
+        match_expression: MatchExpression,
+        match_case: MatchCase,
     },
 };
 
@@ -190,6 +234,7 @@ fn releaseASTNode(ast_node_array: *ASTNodeArray, node_index: usize) void {
 }
 
 pub fn parseRoot(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Root at {d}:{d}", .{ lexer.line, lexer.pos });
     const ast_node_index = try ast_node_array.alloc();
 
     const containor_node_index = try parseBlockExpressionContent(ast_node_array, lexer);
@@ -215,6 +260,7 @@ pub fn parseRoot(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapaci
 }
 
 fn parseBlockExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Block Expression at {d}:{d}", .{ lexer.line, lexer.pos });
     const lbracket_token = lexer.next();
     if (lbracket_token.kind == .l_brace) {
         const context_node = try parseBlockExpressionContent(ast_node_array, lexer);
@@ -231,6 +277,7 @@ fn parseBlockExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutO
 }
 
 fn parseBlockExpressionContent(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing BlockExpressionContent at {d}:{d}", .{ lexer.line, lexer.pos });
     const ast_node_index = try ast_node_array.alloc();
 
     var block_expression_node = ASTNode{
@@ -303,6 +350,7 @@ fn parseBlockExpressionContent(ast_node_array: *ASTNodeArray, lexer: *Lexer) err
 }
 
 fn parseStatement(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Statement at {d}:{d}", .{ lexer.line, lexer.pos });
     const statement_node_index = try ast_node_array.alloc();
     const previous_lexer = lexer.*;
 
@@ -342,12 +390,49 @@ fn parseStatement(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapac
         lexer.* = previous_lexer;
     }
 
+    if (try parseBreakStatement(ast_node_array, lexer)) |break_node_index| {
+        const statement_node = ASTNode{
+            .kind = .statement,
+            .data = .{
+                .statement = .{
+                    .kind = .@"break",
+                    .statement = break_node_index,
+                    .next = null,
+                },
+            },
+        };
+
+        ast_node_array.set(statement_node_index, statement_node) catch unreachable;
+        return statement_node_index;
+    } else {
+        lexer.* = previous_lexer;
+    }
+
+    if (try parseContinueStatement(ast_node_array, lexer)) |continue_node_index| {
+        const statement_node = ASTNode{
+            .kind = .statement,
+            .data = .{
+                .statement = .{
+                    .kind = .@"continue",
+                    .statement = continue_node_index,
+                    .next = null,
+                },
+            },
+        };
+
+        ast_node_array.set(statement_node_index, statement_node) catch unreachable;
+        return statement_node_index;
+    } else {
+        lexer.* = previous_lexer;
+    }
+
     // XXX Error
     ast_node_array.free(statement_node_index) catch unreachable;
     return null;
 }
 
 fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Assignment Statement at {d}:{d}", .{ lexer.line, lexer.pos });
     const assignment_node_index = try ast_node_array.alloc();
 
     var first_target_node_index: ?usize = null;
@@ -448,6 +533,7 @@ fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{
 }
 
 fn parseAssignmentTarget(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Assignment Target at {d}:{d}", .{ lexer.line, lexer.pos });
     const assignment_target_node_index = try ast_node_array.alloc();
 
     const peek_token = lexer.peek();
@@ -490,6 +576,7 @@ fn parseAssignmentTarget(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{Out
 }
 
 fn parseCallStatement(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Call Statement at {d}:{d}", .{ lexer.line, lexer.pos });
     const call_statement_node_index = try ast_node_array.alloc();
 
     if (try parseCallExpression(ast_node_array, lexer)) |call_expression_node_index| {
@@ -517,6 +604,7 @@ fn parseCallStatement(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfC
 }
 
 fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Call Expression at {d}:{d}", .{ lexer.line, lexer.pos });
     const call_expression_node_index = try ast_node_array.alloc();
 
     if (try parseLiteralExpression(ast_node_array, lexer)) |target_node_index| {
@@ -595,6 +683,7 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOf
 }
 
 fn parseCallParameter(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Call Parameter at {d}:{d}", .{ lexer.line, lexer.pos });
     const call_parameter_node_index = try ast_node_array.alloc();
 
     if (try parseExpression(ast_node_array, lexer)) |expression_node_index| {
@@ -616,8 +705,43 @@ fn parseCallParameter(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfC
 }
 
 fn parseExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Expression at {d}:{d}", .{ lexer.line, lexer.pos });
     const expression_node_index = try ast_node_array.alloc();
     const previous_lexer = lexer.*;
+
+    if (try parseLabelExpression(ast_node_array, lexer)) |label_expression_index| {
+        const expression_node = ASTNode{
+            .kind = .expression,
+            .data = .{
+                .expression = .{
+                    .expression = label_expression_index,
+                    .kind = .label,
+                },
+            },
+        };
+
+        ast_node_array.set(expression_node_index, expression_node) catch unreachable;
+        return expression_node_index;
+    } else {
+        lexer.* = previous_lexer;
+    }
+
+    if (try parseMatchExpression(ast_node_array, lexer)) |match_expression_index| {
+        const expression_node = ASTNode{
+            .kind = .expression,
+            .data = .{
+                .expression = .{
+                    .expression = match_expression_index,
+                    .kind = .match,
+                },
+            },
+        };
+
+        ast_node_array.set(expression_node_index, expression_node) catch unreachable;
+        return expression_node_index;
+    } else {
+        lexer.* = previous_lexer;
+    }
 
     if (try parseCallExpression(ast_node_array, lexer)) |call_expression_index| {
         const expression_node = ASTNode{
@@ -710,11 +834,12 @@ fn parseExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapa
 }
 
 fn parseLiteralExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Literal Expression at {d}:{d}", .{ lexer.line, lexer.pos });
     const literal_expression_node_index = try ast_node_array.alloc();
 
     const peek_token = lexer.peek();
     if (peek_token) |_peek_token| {
-        lexer.dump(&_peek_token);
+        // lexer.dump(&_peek_token);
         if (_peek_token.kind == .string or _peek_token.kind == .char or _peek_token.kind == .identifier or _peek_token.kind == .integer or _peek_token.kind == .float) {
             _ = lexer.next();
             const literal_expression_node = ASTNode{
@@ -747,6 +872,7 @@ fn parseLiteralExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{Ou
 }
 
 fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Type Expression at {d}:{d}", .{ lexer.line, lexer.pos });
     const type_expression_node_index = try ast_node_array.alloc();
 
     var peek_token = lexer.peek();
@@ -865,6 +991,7 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOf
 }
 
 fn parseTypeEntry(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Type Entry at {d}:{d}", .{ lexer.line, lexer.pos });
     const type_entry_node_index = try ast_node_array.alloc();
 
     var name_token: Token = undefined;
@@ -923,6 +1050,7 @@ fn parseTypeEntry(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapac
 }
 
 fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Function Parameter at {d}:{d}", .{ lexer.line, lexer.pos });
     const function_parameter_node_index = try ast_node_array.alloc();
 
     var peek_token = lexer.peek();
@@ -987,6 +1115,7 @@ fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{Ou
 }
 
 fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Function Expression at {d}:{d}", .{ lexer.line, lexer.pos });
     const function_expression_node_index = try ast_node_array.alloc();
 
     var peek_token = lexer.peek();
@@ -1078,15 +1207,366 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{O
     return function_expression_node_index;
 }
 
+fn parseLabelExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Label Expression at {d}:{d}", .{ lexer.line, lexer.pos });
+    const label_expression_node_index = try ast_node_array.alloc();
+
+    var label_expression: usize = undefined;
+    if (try parseLiteralExpression(ast_node_array, lexer)) |_label_expression| {
+        label_expression = _label_expression;
+    } else {
+        // XXX Error
+        ast_node_array.free(label_expression_node_index) catch unreachable;
+        return null;
+    }
+
+    const peek_token = lexer.peek();
+    if (peek_token) |_peek_token| {
+        if (_peek_token.kind == .colon) {
+            _ = lexer.next();
+        } else {
+            // XXX Error
+            ast_node_array.free(label_expression_node_index) catch unreachable;
+            return null;
+        }
+    } else {
+        // XXX Error
+        ast_node_array.free(label_expression_node_index) catch unreachable;
+        return null;
+    }
+
+    if (try parseExpression(ast_node_array, lexer)) |expression| {
+        const label_expression_node = ASTNode{
+            .data = .{
+                .label_expression = .{
+                    .expression = expression,
+                    .label = label_expression,
+                },
+            },
+            .kind = .label_expression,
+        };
+        ast_node_array.set(label_expression_node_index, label_expression_node) catch unreachable;
+        return label_expression_node_index;
+    }
+
+    // XXX Error
+    ast_node_array.free(label_expression_node_index) catch unreachable;
+    return null;
+}
+
 // fn parsePointerExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {}
 
-// fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {}
+fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Match Expression at {d}:{d}", .{ lexer.line, lexer.pos });
+    const match_expression_node_index = try ast_node_array.alloc();
 
-// fn parseMatchCase(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {}
+    var peek_token = lexer.peek();
+    if (peek_token) |_peek_token| {
+        if (_peek_token.kind == .keyword_match) {
+            _ = lexer.next();
+        } else {
+            // XXX Error
+            ast_node_array.free(match_expression_node_index) catch unreachable;
+            return null;
+        }
+    } else {
+        // XXX Error
+        ast_node_array.free(match_expression_node_index) catch unreachable;
+        return null;
+    }
 
-// fn parseBreakStatement(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {}
+    peek_token = lexer.peek();
+    if (peek_token) |_peek_token| {
+        if (_peek_token.kind == .l_paren) {
+            _ = lexer.next();
+        } else {
+            // XXX Error
+            ast_node_array.free(match_expression_node_index) catch unreachable;
+            return null;
+        }
+    } else {
+        // XXX Error
+        ast_node_array.free(match_expression_node_index) catch unreachable;
+        return null;
+    }
 
-// fn parseContinueStatement(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {}
+    var expression: usize = undefined;
+    if (try parseExpression(ast_node_array, lexer)) |_expression| {
+        expression = _expression;
+    } else {
+
+        // XXX Error
+        ast_node_array.free(match_expression_node_index) catch unreachable;
+        return null;
+    }
+
+    peek_token = lexer.peek();
+    if (peek_token) |_peek_token| {
+        if (_peek_token.kind == .r_paren) {
+            _ = lexer.next();
+        } else {
+            // XXX Error
+            ast_node_array.free(match_expression_node_index) catch unreachable;
+            return null;
+        }
+    } else {
+        // XXX Error
+        ast_node_array.free(match_expression_node_index) catch unreachable;
+        return null;
+    }
+
+    peek_token = lexer.peek();
+    if (peek_token) |_peek_token| {
+        if (_peek_token.kind == .l_brace) {
+            _ = lexer.next();
+        } else {
+            // XXX Error
+            ast_node_array.free(match_expression_node_index) catch unreachable;
+            return null;
+        }
+    } else {
+        // XXX Error
+        ast_node_array.free(match_expression_node_index) catch unreachable;
+        return null;
+    }
+
+    var first_match_case_node_index: ?usize = null;
+    var current_match_case_node_index: ?usize = null;
+    while (try parseMatchCase(ast_node_array, lexer)) |match_case_node_index| {
+        if (first_match_case_node_index == null) {
+            first_match_case_node_index = match_case_node_index;
+        }
+
+        if (current_match_case_node_index) |_current_match_case_node_index| {
+            const current_match_case_node = ast_node_array.get(_current_match_case_node_index) catch unreachable;
+            const linked_match_case_node = ASTNode{
+                .data = .{
+                    .match_case = .{
+                        .expression = current_match_case_node.data.match_case.expression,
+                        .next = match_case_node_index,
+                    },
+                },
+                .kind = .match_case,
+            };
+
+            ast_node_array.set(_current_match_case_node_index, linked_match_case_node) catch unreachable;
+        }
+
+        current_match_case_node_index = match_case_node_index;
+
+        peek_token = lexer.peek();
+        if (peek_token) |_peek_token| {
+            if (_peek_token.kind != .comma) {
+                break;
+            } else {
+                _ = lexer.next();
+            }
+        }
+    }
+
+    peek_token = lexer.peek();
+    if (peek_token) |_peek_token| {
+        if (_peek_token.kind == .r_brace) {
+            _ = lexer.next();
+        } else {
+            // XXX Error
+            if (first_match_case_node_index) |_first_match_case_node_index| {
+                releaseASTNode(ast_node_array, _first_match_case_node_index);
+            }
+            ast_node_array.free(match_expression_node_index) catch unreachable;
+            return null;
+        }
+    } else {
+        // XXX Error
+        if (first_match_case_node_index) |_first_match_case_node_index| {
+            releaseASTNode(ast_node_array, _first_match_case_node_index);
+        }
+        ast_node_array.free(match_expression_node_index) catch unreachable;
+        return null;
+    }
+
+    const match_expression_node = ASTNode{
+        .data = .{
+            .match_expression = .{
+                .case = first_match_case_node_index,
+                .expression = expression,
+            },
+        },
+        .kind = .match_expression,
+    };
+
+    ast_node_array.set(match_expression_node_index, match_expression_node) catch unreachable;
+    return match_expression_node_index;
+}
+
+fn parseMatchCase(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Match Case at {d}:{d}", .{ lexer.line, lexer.pos });
+    const match_case_node_index = try ast_node_array.alloc();
+
+    const peek_token = lexer.peek();
+    if (peek_token) |_peek_token| {
+        if (_peek_token.kind == .keyword_case) {
+            _ = lexer.next();
+        } else {
+            // XXX Error
+            ast_node_array.free(match_case_node_index) catch unreachable;
+            return null;
+        }
+    } else {
+        // XXX Error
+        ast_node_array.free(match_case_node_index) catch unreachable;
+        return null;
+    }
+
+    if (try parseLabelExpression(ast_node_array, lexer)) |label_expression| {
+        const match_case_node = ASTNode{
+            .data = .{
+                .match_case = .{
+                    .expression = label_expression,
+                    .next = null,
+                },
+            },
+            .kind = .match_case,
+        };
+
+        ast_node_array.set(match_case_node_index, match_case_node) catch unreachable;
+        return match_case_node_index;
+    }
+
+    // XXX Error
+    ast_node_array.free(match_case_node_index) catch unreachable;
+    return null;
+}
+
+fn parseBreakStatement(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Break Statement at {d}:{d}", .{ lexer.line, lexer.pos });
+    const break_statement_node_index = try ast_node_array.alloc();
+
+    if (lexer.peek()) |peek_token| {
+        if (peek_token.kind == .keyword_break) {
+            _ = lexer.next();
+        } else {
+            // XXX Error
+            ast_node_array.free(break_statement_node_index) catch unreachable;
+            return null;
+        }
+    } else {
+        // XXX Error
+        ast_node_array.free(break_statement_node_index) catch unreachable;
+        return null;
+    }
+
+    const target_token: ?Token = lexer.peek();
+    if (target_token) |_target_token| {
+        if (_target_token.kind == .identifier) {
+            _ = lexer.next();
+            if (try parseExpression(ast_node_array, lexer)) |expression| {
+                if (lexer.peek()) |peek_token| {
+                    if (peek_token.kind != .semicolon) {
+                        // XXX Error
+                        releaseASTNode(ast_node_array, expression);
+                        ast_node_array.free(break_statement_node_index) catch unreachable;
+                        return null;
+                    } else {
+                        _ = lexer.next();
+                    }
+                }
+
+                const break_statement_node = ASTNode{
+                    .data = .{
+                        .break_statement = .{
+                            .expression = expression,
+                            .name = .{
+                                .start = _target_token.start,
+                                .end = _target_token.end,
+                            },
+                        },
+                    },
+                    .kind = .break_statement,
+                };
+                ast_node_array.set(break_statement_node_index, break_statement_node) catch unreachable;
+                return break_statement_node_index;
+            } else {
+                // XXX Error
+                ast_node_array.free(break_statement_node_index) catch unreachable;
+                return null;
+            }
+        } else {
+            // XXX Error
+            ast_node_array.free(break_statement_node_index) catch unreachable;
+            return null;
+        }
+    } else {
+        // XXX Error
+        ast_node_array.free(break_statement_node_index) catch unreachable;
+        return null;
+    }
+}
+
+fn parseContinueStatement(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Continue Statement at {d}:{d}", .{ lexer.line, lexer.pos });
+    const continue_statement_node_index = try ast_node_array.alloc();
+
+    if (lexer.peek()) |peek_token| {
+        if (peek_token.kind == .keyword_continue) {
+            _ = lexer.next();
+        } else {
+            // XXX Error
+            ast_node_array.free(continue_statement_node_index) catch unreachable;
+            return null;
+        }
+    } else {
+        // XXX Error
+        ast_node_array.free(continue_statement_node_index) catch unreachable;
+        return null;
+    }
+
+    const target_token: ?Token = lexer.peek();
+    if (target_token) |_target_token| {
+        if (_target_token.kind == .identifier) {
+            _ = lexer.next();
+            if (try parseExpression(ast_node_array, lexer)) |expression| {
+                if (lexer.peek()) |peek_token| {
+                    if (peek_token.kind != .semicolon) {
+                        // XXX Error
+                        releaseASTNode(ast_node_array, expression);
+                        ast_node_array.free(continue_statement_node_index) catch unreachable;
+                        return null;
+                    } else {
+                        _ = lexer.next();
+                    }
+                }
+
+                const continue_statement_node = ASTNode{
+                    .data = .{
+                        .continue_statement = .{
+                            .expression = expression,
+                            .name = .{
+                                .start = _target_token.start,
+                                .end = _target_token.end,
+                            },
+                        },
+                    },
+                    .kind = .continue_statement,
+                };
+                ast_node_array.set(continue_statement_node_index, continue_statement_node) catch unreachable;
+                return continue_statement_node_index;
+            } else {
+                // XXX Error
+                ast_node_array.free(continue_statement_node_index) catch unreachable;
+                return null;
+            }
+        } else {
+            // XXX Error
+            ast_node_array.free(continue_statement_node_index) catch unreachable;
+            return null;
+        }
+    } else {
+        // XXX Error
+        ast_node_array.free(continue_statement_node_index) catch unreachable;
+        return null;
+    }
+}
 
 pub fn dump(ast_node_array: *ASTNodeArray, source: [:0]const u8, root_node_index: usize, space: u32) error{OutOfRange}!void {
     const indent = 2;
@@ -1149,7 +1629,10 @@ pub fn dump(ast_node_array: *ASTNodeArray, source: [:0]const u8, root_node_index
                 current_parameter = current_parameter_node.data.call_parameter.next;
             }
         },
-        .call_parameter => {},
+        .call_parameter => {
+            std.debug.print("Call Parameter:\n", .{});
+            try dump(ast_node_array, source, root_node.data.call_parameter.expression, space + indent);
+        },
         .call_statement => {
             std.debug.print("Call Statement:\n", .{});
             try dump(ast_node_array, source, root_node.data.call_statement.call_expression, space + indent);
@@ -1237,6 +1720,61 @@ pub fn dump(ast_node_array: *ASTNodeArray, source: [:0]const u8, root_node_index
                 printSpace(space + indent);
                 std.debug.print("Entry:\n", .{});
                 try dump(ast_node_array, source, entry, space + indent * 2);
+            }
+        },
+        .break_statement => {
+            std.debug.print("Break Statement:\n", .{});
+
+            printSpace(space + indent);
+            std.debug.print("Target: {s}\n", .{source[root_node.data.break_statement.name.start..root_node.data.break_statement.name.end]});
+            printSpace(space + indent);
+            std.debug.print("Expression:\n", .{});
+            try dump(ast_node_array, source, root_node.data.break_statement.expression, space + indent * 2);
+        },
+        .continue_statement => {
+            std.debug.print("Continue Statement:\n", .{});
+
+            printSpace(space + indent);
+            std.debug.print("Target: {s}\n", .{source[root_node.data.continue_statement.name.start..root_node.data.continue_statement.name.end]});
+            printSpace(space + indent);
+            std.debug.print("Expression:\n", .{});
+            try dump(ast_node_array, source, root_node.data.continue_statement.expression, space + indent * 2);
+        },
+        .label_expression => {
+            std.debug.print("Label Expression:\n", .{});
+
+            printSpace(space + indent);
+            std.debug.print("Label:\n", .{});
+            try dump(ast_node_array, source, root_node.data.label_expression.label, space + indent * 2);
+            printSpace(space + indent);
+            std.debug.print("Expression:\n", .{});
+            try dump(ast_node_array, source, root_node.data.label_expression.expression, space + indent * 2);
+        },
+        .match_case => {
+            std.debug.print("Match Case:\n", .{});
+
+            const internal_label_expression = try ast_node_array.get(root_node.data.match_case.expression);
+            // XXX Don't forget Match Case use Label Expression's internal data!
+
+            printSpace(space + indent);
+            std.debug.print("Case:\n", .{});
+            try dump(ast_node_array, source, internal_label_expression.data.label_expression.label, space + indent * 2);
+            printSpace(space + indent);
+            std.debug.print("Expression:\n", .{});
+            try dump(ast_node_array, source, internal_label_expression.data.label_expression.expression, space + indent * 2);
+        },
+        .match_expression => {
+            std.debug.print("Match Expression:\n", .{});
+
+            printSpace(space + indent);
+            std.debug.print("Condition:\n", .{});
+            try dump(ast_node_array, source, root_node.data.match_expression.expression, space + indent * 2);
+
+            var current_case_node_index = root_node.data.match_expression.case;
+            while (current_case_node_index) |_current_case_node_index| {
+                const current_case_node = try ast_node_array.get(_current_case_node_index);
+                try dump(ast_node_array, source, _current_case_node_index, space + indent * 2);
+                current_case_node_index = current_case_node.data.match_case.next;
             }
         },
     }
