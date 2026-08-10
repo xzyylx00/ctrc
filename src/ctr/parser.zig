@@ -24,6 +24,7 @@ pub const ASTNode = struct {
         root,
         label_expression,
         block_expression,
+        attributed_expression,
         statement,
         assignment_statement,
         expression,
@@ -55,6 +56,7 @@ pub const ASTNode = struct {
             in,
             out,
             inout,
+            none,
         };
         access_attribute: AccessAttribute,
         name: Name,
@@ -91,6 +93,9 @@ pub const ASTNode = struct {
             char,
             integer,
             float,
+            nil,
+            macro,
+            underline,
             identifier,
         };
 
@@ -119,6 +124,19 @@ pub const ASTNode = struct {
         next: ?usize,
     };
 
+    const AttributedExpression = struct {
+        const AttributeKind = enum {
+            in,
+            out,
+            inout,
+            ref,
+            ptr,
+        };
+
+        kind: AttributeKind,
+        expression: usize,
+    };
+
     const Statement = struct {
         const StatementKind = enum {
             assignment,
@@ -141,6 +159,7 @@ pub const ASTNode = struct {
             match,
             literal,
             label,
+            attributed,
         };
 
         kind: ExpressionKind,
@@ -223,6 +242,7 @@ pub const ASTNode = struct {
         function_parameter: FunctionParameter,
         match_expression: MatchExpression,
         match_case: MatchCase,
+        attributed_expression: AttributedExpression,
     },
 };
 
@@ -235,10 +255,17 @@ fn releaseASTNode(ast_node_array: *ASTNodeArray, node_index: usize) void {
 
 pub fn parseRoot(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
     std.log.debug("Parsing Root at {d}:{d}", .{ lexer.line, lexer.pos });
+    defer std.log.debug("Leaving Root at {d}:{d}", .{ lexer.line, lexer.pos });
     const ast_node_index = try ast_node_array.alloc();
 
     const containor_node_index = try parseBlockExpressionContent(ast_node_array, lexer);
     if (containor_node_index) |_containor_node_index| {
+        if (lexer.next().kind != .eof) {
+            // XXX Error
+            releaseASTNode(ast_node_array, _containor_node_index);
+            return null;
+        }
+
         const ast_node = ASTNode{
             .kind = .root,
             .data = .{
@@ -249,7 +276,6 @@ pub fn parseRoot(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapaci
         };
 
         ast_node_array.set(ast_node_index, ast_node) catch unreachable;
-
         return ast_node_index;
     } else {
         // XXX Error
@@ -261,6 +287,7 @@ pub fn parseRoot(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapaci
 
 fn parseBlockExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
     std.log.debug("Parsing Block Expression at {d}:{d}", .{ lexer.line, lexer.pos });
+    defer std.log.debug("Leaving Block Expression at {d}:{d}", .{ lexer.line, lexer.pos });
     const lbracket_token = lexer.next();
     if (lbracket_token.kind == .l_brace) {
         const context_node = try parseBlockExpressionContent(ast_node_array, lexer);
@@ -278,6 +305,7 @@ fn parseBlockExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutO
 
 fn parseBlockExpressionContent(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
     std.log.debug("Parsing BlockExpressionContent at {d}:{d}", .{ lexer.line, lexer.pos });
+    defer std.log.debug("Leaving BlockExpressionContent at {d}:{d}", .{ lexer.line, lexer.pos });
     const ast_node_index = try ast_node_array.alloc();
 
     var block_expression_node = ASTNode{
@@ -351,6 +379,7 @@ fn parseBlockExpressionContent(ast_node_array: *ASTNodeArray, lexer: *Lexer) err
 
 fn parseStatement(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
     std.log.debug("Parsing Statement at {d}:{d}", .{ lexer.line, lexer.pos });
+    defer std.log.debug("Leaving Statement at {d}:{d}", .{ lexer.line, lexer.pos });
     const statement_node_index = try ast_node_array.alloc();
     const previous_lexer = lexer.*;
 
@@ -433,6 +462,7 @@ fn parseStatement(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapac
 
 fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
     std.log.debug("Parsing Assignment Statement at {d}:{d}", .{ lexer.line, lexer.pos });
+    defer std.log.debug("Leaving Assignment Statement at {d}:{d}", .{ lexer.line, lexer.pos });
     const assignment_node_index = try ast_node_array.alloc();
 
     var first_target_node_index: ?usize = null;
@@ -491,6 +521,10 @@ fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{
         }
 
         _ = lexer.next();
+    } else {
+        // XXX Error
+        ast_node_array.free(assignment_node_index) catch unreachable;
+        return null;
     }
 
     var expression_node_index: ?usize = null;
@@ -519,6 +553,10 @@ fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{
             ast_node_array.set(assignment_node_index, assignment_node) catch unreachable;
             return assignment_node_index;
         }
+    } else {
+        // XXX Error
+        ast_node_array.free(assignment_node_index) catch unreachable;
+        return null;
     }
 
     // XXX Error
@@ -534,6 +572,7 @@ fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{
 
 fn parseAssignmentTarget(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
     std.log.debug("Parsing Assignment Target at {d}:{d}", .{ lexer.line, lexer.pos });
+    defer std.log.debug("Leaving Assignment Target at {d}:{d}", .{ lexer.line, lexer.pos });
     const assignment_target_node_index = try ast_node_array.alloc();
 
     const peek_token = lexer.peek();
@@ -567,7 +606,29 @@ fn parseAssignmentTarget(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{Out
                     return assignment_target_node_index;
                 }
             }
+        } else if (_peek_token.kind == .underline) {
+            _ = lexer.next();
+            const assignment_target_node = ASTNode{
+                .data = .{
+                    .assignment_target = .{
+                        .access_attribute = .none,
+                        .name = .{
+                            .start = _peek_token.start,
+                            .end = _peek_token.end,
+                        },
+                        .next = null,
+                    },
+                },
+                .kind = .assignment_target,
+            };
+
+            ast_node_array.set(assignment_target_node_index, assignment_target_node) catch unreachable;
+            return assignment_target_node_index;
         }
+    } else {
+        // XXX Error
+        ast_node_array.free(assignment_target_node_index) catch unreachable;
+        return null;
     }
 
     // XXX Error
@@ -577,6 +638,7 @@ fn parseAssignmentTarget(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{Out
 
 fn parseCallStatement(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
     std.log.debug("Parsing Call Statement at {d}:{d}", .{ lexer.line, lexer.pos });
+    defer std.log.debug("Leaving Call Statement at {d}:{d}", .{ lexer.line, lexer.pos });
     const call_statement_node_index = try ast_node_array.alloc();
 
     if (try parseCallExpression(ast_node_array, lexer)) |call_expression_node_index| {
@@ -605,6 +667,7 @@ fn parseCallStatement(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfC
 
 fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
     std.log.debug("Parsing Call Expression at {d}:{d}", .{ lexer.line, lexer.pos });
+    defer std.log.debug("Leaving Call Expression at {d}:{d}", .{ lexer.line, lexer.pos });
     const call_expression_node_index = try ast_node_array.alloc();
 
     if (try parseLiteralExpression(ast_node_array, lexer)) |target_node_index| {
@@ -616,11 +679,15 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOf
         if (peek_token) |_peek_token| {
             if (_peek_token.kind != .l_paren) {
                 // XXX Error
-                // And more
+                ast_node_array.free(call_expression_node_index) catch unreachable;
                 return null;
             } else {
                 _ = lexer.next();
             }
+        } else {
+            // XXX Error
+            ast_node_array.free(call_expression_node_index) catch unreachable;
+            return null;
         }
 
         while (try parseCallParameter(ast_node_array, lexer)) |call_parameter_node_index| {
@@ -651,6 +718,10 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOf
                 } else {
                     _ = lexer.next();
                 }
+            } else {
+                // XXX Error
+                ast_node_array.free(call_expression_node_index) catch unreachable;
+                return null;
             }
         }
         peek_token = lexer.peek();
@@ -662,6 +733,10 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOf
             } else {
                 _ = lexer.next();
             }
+        } else {
+            // XXX Error
+            ast_node_array.free(call_expression_node_index) catch unreachable;
+            return null;
         }
 
         const call_expression_node = ASTNode{
@@ -678,12 +753,14 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOf
         return call_expression_node_index;
     }
 
+    // XXX Error
     ast_node_array.free(call_expression_node_index) catch unreachable;
     return null;
 }
 
 fn parseCallParameter(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
     std.log.debug("Parsing Call Parameter at {d}:{d}", .{ lexer.line, lexer.pos });
+    defer std.log.debug("Leaving Call Parameter at {d}:{d}", .{ lexer.line, lexer.pos });
     const call_parameter_node_index = try ast_node_array.alloc();
 
     if (try parseExpression(ast_node_array, lexer)) |expression_node_index| {
@@ -706,6 +783,7 @@ fn parseCallParameter(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfC
 
 fn parseExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
     std.log.debug("Parsing Expression at {d}:{d}", .{ lexer.line, lexer.pos });
+    defer std.log.debug("Leaving Expression at {d}:{d}", .{ lexer.line, lexer.pos });
     const expression_node_index = try ast_node_array.alloc();
     const previous_lexer = lexer.*;
 
@@ -750,6 +828,23 @@ fn parseExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapa
                 .expression = .{
                     .expression = call_expression_index,
                     .kind = .call,
+                },
+            },
+        };
+
+        ast_node_array.set(expression_node_index, expression_node) catch unreachable;
+        return expression_node_index;
+    } else {
+        lexer.* = previous_lexer;
+    }
+
+    if (try parseAttributedExpression(ast_node_array, lexer)) |attributed_expression_index| {
+        const expression_node = ASTNode{
+            .kind = .expression,
+            .data = .{
+                .expression = .{
+                    .expression = attributed_expression_index,
+                    .kind = .attributed,
                 },
             },
         };
@@ -835,12 +930,13 @@ fn parseExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapa
 
 fn parseLiteralExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
     std.log.debug("Parsing Literal Expression at {d}:{d}", .{ lexer.line, lexer.pos });
+    defer std.log.debug("Leaving Literal Expression at {d}:{d}", .{ lexer.line, lexer.pos });
     const literal_expression_node_index = try ast_node_array.alloc();
 
     const peek_token = lexer.peek();
     if (peek_token) |_peek_token| {
         // lexer.dump(&_peek_token);
-        if (_peek_token.kind == .string or _peek_token.kind == .char or _peek_token.kind == .identifier or _peek_token.kind == .integer or _peek_token.kind == .float) {
+        if (_peek_token.kind == .string or _peek_token.kind == .char or _peek_token.kind == .identifier or _peek_token.kind == .integer or _peek_token.kind == .float or _peek_token.kind == .keyword_nil or _peek_token.kind == .macro or _peek_token.kind == .underline) {
             _ = lexer.next();
             const literal_expression_node = ASTNode{
                 .data = .{
@@ -851,6 +947,9 @@ fn parseLiteralExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{Ou
                             .identifier => .identifier,
                             .integer => .integer,
                             .float => .float,
+                            .macro => .macro,
+                            .underline => .underline,
+                            .keyword_nil => .nil,
                             else => unreachable,
                         },
                         .position = .{
@@ -865,6 +964,10 @@ fn parseLiteralExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{Ou
             ast_node_array.set(literal_expression_node_index, literal_expression_node) catch unreachable;
             return literal_expression_node_index;
         }
+    } else {
+        // XXX Error
+        ast_node_array.free(literal_expression_node_index) catch unreachable;
+        return null;
     }
 
     ast_node_array.free(literal_expression_node_index) catch unreachable;
@@ -873,6 +976,7 @@ fn parseLiteralExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{Ou
 
 fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
     std.log.debug("Parsing Type Expression at {d}:{d}", .{ lexer.line, lexer.pos });
+    defer std.log.debug("Leaving Type Expression at {d}:{d}", .{ lexer.line, lexer.pos });
     const type_expression_node_index = try ast_node_array.alloc();
 
     var peek_token = lexer.peek();
@@ -884,6 +988,10 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOf
             ast_node_array.free(type_expression_node_index) catch unreachable;
             return null;
         }
+    } else {
+        // XXX Error
+        ast_node_array.free(type_expression_node_index) catch unreachable;
+        return null;
     }
 
     peek_token = lexer.peek();
@@ -895,6 +1003,10 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOf
             ast_node_array.free(type_expression_node_index) catch unreachable;
             return null;
         }
+    } else {
+        // XXX Error
+        ast_node_array.free(type_expression_node_index) catch unreachable;
+        return null;
     }
 
     var expression_node_index: ?usize = null;
@@ -915,6 +1027,10 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOf
             ast_node_array.free(type_expression_node_index) catch unreachable;
             return null;
         }
+    } else {
+        // XXX Error
+        ast_node_array.free(type_expression_node_index) catch unreachable;
+        return null;
     }
 
     peek_token = lexer.peek();
@@ -926,6 +1042,10 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOf
             ast_node_array.free(type_expression_node_index) catch unreachable;
             return null;
         }
+    } else {
+        // XXX Error
+        ast_node_array.free(type_expression_node_index) catch unreachable;
+        return null;
     }
 
     var first_type_entry_node_index: ?usize = null;
@@ -960,6 +1080,10 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOf
             } else {
                 _ = lexer.next();
             }
+        } else {
+            // XXX Error
+            ast_node_array.free(type_expression_node_index) catch unreachable;
+            return null;
         }
     }
 
@@ -975,6 +1099,10 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOf
             }
             return null;
         }
+    } else {
+        // XXX Error
+        ast_node_array.free(type_expression_node_index) catch unreachable;
+        return null;
     }
 
     const type_expression_node = ASTNode{
@@ -992,6 +1120,7 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOf
 
 fn parseTypeEntry(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
     std.log.debug("Parsing Type Entry at {d}:{d}", .{ lexer.line, lexer.pos });
+    defer std.log.debug("Leaving Type Entry at {d}:{d}", .{ lexer.line, lexer.pos });
     const type_entry_node_index = try ast_node_array.alloc();
 
     var name_token: Token = undefined;
@@ -1065,6 +1194,7 @@ fn parseTypeEntry(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapac
 
 fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
     std.log.debug("Parsing Function Parameter at {d}:{d}", .{ lexer.line, lexer.pos });
+    defer std.log.debug("Leaving Function Parameter at {d}:{d}", .{ lexer.line, lexer.pos });
     const function_parameter_node_index = try ast_node_array.alloc();
 
     var peek_token = lexer.peek();
@@ -1089,6 +1219,22 @@ fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{Ou
     if (peek_token) |_peek_token| {
         if (_peek_token.kind == .identifier) {
             name_token = _peek_token;
+            _ = lexer.next();
+        } else {
+            // XXX Error
+            ast_node_array.free(function_parameter_node_index) catch unreachable;
+            return null;
+        }
+    } else {
+        // XXX Error
+        ast_node_array.free(function_parameter_node_index) catch unreachable;
+        return null;
+    }
+
+    peek_token = lexer.peek();
+    if (peek_token) |_peek_token| {
+        if (_peek_token.kind == .colon) {
+            _ = lexer.next();
         } else {
             // XXX Error
             ast_node_array.free(function_parameter_node_index) catch unreachable;
@@ -1131,6 +1277,7 @@ fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{Ou
 
 fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
     std.log.debug("Parsing Function Expression at {d}:{d}", .{ lexer.line, lexer.pos });
+    defer std.log.debug("Leaving Function Expression at {d}:{d}", .{ lexer.line, lexer.pos });
     const function_expression_node_index = try ast_node_array.alloc();
 
     var peek_token = lexer.peek();
@@ -1142,6 +1289,10 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{O
             ast_node_array.free(function_expression_node_index) catch unreachable;
             return null;
         }
+    } else {
+        // XXX Error
+        ast_node_array.free(function_expression_node_index) catch unreachable;
+        return null;
     }
 
     peek_token = lexer.peek();
@@ -1153,6 +1304,10 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{O
             ast_node_array.free(function_expression_node_index) catch unreachable;
             return null;
         }
+    } else {
+        // XXX Error
+        ast_node_array.free(function_expression_node_index) catch unreachable;
+        return null;
     }
 
     var first_function_parameter_node_index: ?usize = null;
@@ -1189,6 +1344,10 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{O
             } else {
                 _ = lexer.next();
             }
+        } else {
+            // XXX Error
+            ast_node_array.free(function_expression_node_index) catch unreachable;
+            return null;
         }
     }
 
@@ -1204,6 +1363,13 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{O
             }
             return null;
         }
+    } else {
+        // XXX Error
+        ast_node_array.free(function_expression_node_index) catch unreachable;
+        if (first_function_parameter_node_index) |_first_function_parameter_node_index| {
+            releaseASTNode(ast_node_array, _first_function_parameter_node_index);
+        }
+        return null;
     }
 
     const expression = try parseExpression(ast_node_array, lexer);
@@ -1224,6 +1390,7 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{O
 
 fn parseLabelExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
     std.log.debug("Parsing Label Expression at {d}:{d}", .{ lexer.line, lexer.pos });
+    defer std.log.debug("Leaving Label Expression at {d}:{d}", .{ lexer.line, lexer.pos });
     const label_expression_node_index = try ast_node_array.alloc();
 
     var label_expression: usize = undefined;
@@ -1273,6 +1440,7 @@ fn parseLabelExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutO
 
 fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
     std.log.debug("Parsing Match Expression at {d}:{d}", .{ lexer.line, lexer.pos });
+    defer std.log.debug("Leaving Match Expression at {d}:{d}", .{ lexer.line, lexer.pos });
     const match_expression_node_index = try ast_node_array.alloc();
 
     var peek_token = lexer.peek();
@@ -1376,6 +1544,10 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutO
             } else {
                 _ = lexer.next();
             }
+        } else {
+            // XXX Error
+            ast_node_array.free(match_expression_node_index) catch unreachable;
+            return null;
         }
     }
 
@@ -1416,6 +1588,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutO
 
 fn parseMatchCase(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
     std.log.debug("Parsing Match Case at {d}:{d}", .{ lexer.line, lexer.pos });
+    defer std.log.debug("Leaving Match Case at {d}:{d}", .{ lexer.line, lexer.pos });
     const match_case_node_index = try ast_node_array.alloc();
 
     const peek_token = lexer.peek();
@@ -1453,8 +1626,50 @@ fn parseMatchCase(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapac
     return null;
 }
 
+fn parseAttributedExpression(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Attributed Expression at {d}:{d}", .{ lexer.line, lexer.pos });
+    defer std.log.debug("Leaving Attribute Expression at {d}:{d}", .{ lexer.line, lexer.pos });
+    const attributed_expression_node_index = try ast_node_array.alloc();
+
+    if (lexer.peek()) |peek_token| {
+        if (peek_token.kind == .keyword_in or peek_token.kind == .keyword_out or peek_token.kind == .keyword_inout or peek_token.kind == .keyword_ptr or peek_token.kind == .keyword_ref) {
+            _ = lexer.next();
+
+            if (try parseExpression(ast_node_array, lexer)) |expression| {
+                const attributed_expression_node = ASTNode{
+                    .data = .{
+                        .attributed_expression = .{
+                            .expression = expression,
+                            .kind = switch (peek_token.kind) {
+                                .keyword_in => .in,
+                                .keyword_out => .out,
+                                .keyword_inout => .inout,
+                                .keyword_ptr => .ptr,
+                                .keyword_ref => .ref,
+                                else => unreachable,
+                            },
+                        },
+                    },
+                    .kind = .attributed_expression,
+                };
+
+                ast_node_array.set(attributed_expression_node_index, attributed_expression_node) catch unreachable;
+                return attributed_expression_node_index;
+            }
+        }
+    } else {
+        // XXX Error
+        ast_node_array.free(attributed_expression_node_index) catch unreachable;
+        return null;
+    }
+
+    ast_node_array.free(attributed_expression_node_index) catch unreachable;
+    return null;
+}
+
 fn parseBreakStatement(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
     std.log.debug("Parsing Break Statement at {d}:{d}", .{ lexer.line, lexer.pos });
+    defer std.log.debug("Leaving Break Statement at {d}:{d}", .{ lexer.line, lexer.pos });
     const break_statement_node_index = try ast_node_array.alloc();
 
     if (lexer.peek()) |peek_token| {
@@ -1485,6 +1700,11 @@ fn parseBreakStatement(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOf
                     } else {
                         _ = lexer.next();
                     }
+                } else {
+                    // XXX Error
+                    releaseASTNode(ast_node_array, expression);
+                    ast_node_array.free(break_statement_node_index) catch unreachable;
+                    return null;
                 }
 
                 const break_statement_node = ASTNode{
@@ -1520,6 +1740,7 @@ fn parseBreakStatement(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOf
 
 fn parseContinueStatement(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{OutOfCapacity}!?usize {
     std.log.debug("Parsing Continue Statement at {d}:{d}", .{ lexer.line, lexer.pos });
+    defer std.log.debug("Leaving Continue Statement at {d}:{d}", .{ lexer.line, lexer.pos });
     const continue_statement_node_index = try ast_node_array.alloc();
 
     if (lexer.peek()) |peek_token| {
@@ -1550,6 +1771,11 @@ fn parseContinueStatement(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{Ou
                     } else {
                         _ = lexer.next();
                     }
+                } else {
+                    // XXX Error
+                    releaseASTNode(ast_node_array, expression);
+                    ast_node_array.free(continue_statement_node_index) catch unreachable;
+                    return null;
                 }
 
                 const continue_statement_node = ASTNode{
@@ -1602,7 +1828,7 @@ pub fn dump(ast_node_array: *ASTNodeArray, source: [:0]const u8, root_node_index
 
     switch (root_node.kind) {
         .assignment_statement => {
-            std.debug.print("Assignment Statment:\n", .{});
+            std.debug.print("Assignment Statement:\n", .{});
             try dump(ast_node_array, source, root_node.data.assignment_statement.target, space + indent);
             try dump(ast_node_array, source, root_node.data.assignment_statement.expression, space + indent);
         },
@@ -1614,6 +1840,7 @@ pub fn dump(ast_node_array: *ASTNodeArray, source: [:0]const u8, root_node_index
                     .in => "in",
                     .inout => "inout",
                     .out => "out",
+                    .none => "none",
                 },
             });
             printSpace(space + indent);
@@ -1666,6 +1893,9 @@ pub fn dump(ast_node_array: *ASTNodeArray, source: [:0]const u8, root_node_index
                     .identifier => "identifier",
                     .integer => "integer",
                     .string => "string",
+                    .macro => "macro",
+                    .underline => "underline",
+                    .nil => "nil",
                 },
                 source[root_node.data.literal_expression.position.start..root_node.data.literal_expression.position.end],
             });
@@ -1704,9 +1934,6 @@ pub fn dump(ast_node_array: *ASTNodeArray, source: [:0]const u8, root_node_index
             printSpace(space + indent);
             std.debug.print("Name: {s}\n", .{source[root_node.data.function_parameter.name.start..root_node.data.function_parameter.name.end]});
             try dump(ast_node_array, source, root_node.data.function_parameter.expression, space + indent * 2);
-            if (root_node.data.function_parameter.next) |next| {
-                return try dump(ast_node_array, source, next, space);
-            }
         },
         .type_entry => {
             std.debug.print("Type Entry:\n", .{});
@@ -1790,6 +2017,21 @@ pub fn dump(ast_node_array: *ASTNodeArray, source: [:0]const u8, root_node_index
                 try dump(ast_node_array, source, _current_case_node_index, space + indent * 2);
                 current_case_node_index = current_case_node.data.match_case.next;
             }
+        },
+        .attributed_expression => {
+            std.debug.print("Attributed Expression:\n", .{});
+            printSpace(space + indent);
+            std.debug.print("Attrubute: {s}\n", .{
+                switch (root_node.data.attributed_expression.kind) {
+                    .in => "in",
+                    .inout => "inout",
+                    .out => "out",
+                    .ptr => "ptr",
+                    .ref => "ref",
+                },
+            });
+
+            try dump(ast_node_array, source, root_node.data.attributed_expression.expression, space + indent);
         },
     }
 }

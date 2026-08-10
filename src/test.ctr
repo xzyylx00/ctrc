@@ -1,15 +1,14 @@
-in std, inout b, out c = std();
-out test_ = function () { function_ };
-in kkk = label: {
-        break kkk 1234;
-        continue aaa 5678;
-        inout #"match" = match(1) {
-                case a: 90,
-                case b: 100
-        };
-        a
+in std = #import("std");
+
+in fract = function (in a: uint64) {
+        match (a) {
+                case 0 : 1,
+                case _ : multiply(a, fract ( sub( a, 1 ) ) )
+        }
 };
-function (inout a: As) blk: type ("AA") {
-        a,
-        a: a,
-}
+
+in main = function () {
+        fract(.make(9))
+};
+
+main

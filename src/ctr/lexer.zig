@@ -260,7 +260,7 @@ pub fn next(lexer: *Lexer) Token {
                     lexer.pos += 1;
                     continue :state .char;
                 },
-                'a'...'z', 'A'...'Z', '_' => {
+                'a'...'z', 'A'...'Z', '_', '.' => {
                     token.kind = .identifier;
                     continue :state .identifier;
                 },
@@ -382,12 +382,7 @@ pub fn next(lexer: *Lexer) Token {
                     lexer.index += 1;
                     continue :state .commit;
                 },
-                '.' => {
-                    token.kind = .dot;
-                    lexer.pos += 1;
-                    lexer.index += 1;
-                    continue :state .commit;
-                },
+
                 '-' => {
                     token.kind = .minus;
                     lexer.pos += 1;
@@ -477,8 +472,16 @@ pub fn next(lexer: *Lexer) Token {
             lexer.index += 1;
             lexer.pos += 1;
             switch (lexer.buffer[lexer.index]) {
-                'a'...'z', 'A'...'Z', '_', '0'...'9' => continue :state .identifier,
+                'a'...'z', 'A'...'Z', '_', '0'...'9', '.' => continue :state .identifier,
                 else => {
+                    if (lexer.index - token.start == 1 and lexer.buffer[token.start] == '_') {
+                        token.kind = .underline;
+                        continue :state .commit;
+                    }
+                    if (lexer.index - token.start == 1 and lexer.buffer[token.start] == '.') {
+                        token.kind = .dot;
+                        continue :state .commit;
+                    }
                     const identifier = lexer.buffer[token.start..lexer.index];
                     if (Token.toKeyword(identifier)) |kind| {
                         token.kind = kind;
