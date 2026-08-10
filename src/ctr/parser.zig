@@ -1072,6 +1072,7 @@ fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *Lexer) error{Ou
     if (peek_token) |_peek_token| {
         if (_peek_token.kind == .keyword_in or _peek_token.kind == .keyword_inout or _peek_token.kind == .keyword_out) {
             attribute_token = _peek_token;
+            _ = lexer.next();
         } else {
             // XXX Error
             ast_node_array.free(function_parameter_node_index) catch unreachable;
@@ -1702,7 +1703,6 @@ pub fn dump(ast_node_array: *ASTNodeArray, source: [:0]const u8, root_node_index
             });
             printSpace(space + indent);
             std.debug.print("Name: {s}\n", .{source[root_node.data.function_parameter.name.start..root_node.data.function_parameter.name.end]});
-            printSpace(space + indent);
             try dump(ast_node_array, source, root_node.data.function_parameter.expression, space + indent * 2);
             if (root_node.data.function_parameter.next) |next| {
                 return try dump(ast_node_array, source, next, space);

@@ -9,7 +9,7 @@ in kkk = label: {
         };
         a
 };
-type ("AA") {
+function (inout a: As) blk: type ("AA") {
         a,
         a: a,
 }
