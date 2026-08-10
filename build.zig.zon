@@ -3,8 +3,8 @@
     .version = "0.0.1",
     .dependencies = .{
         .aslibrary = .{
-            .url = "git+https://git.0918273.xyz/xzyylx00/aslibrary.git#3c0ae4efeccff5a6a718c76be7522b8a73469a2e",
-            .hash = "aslibrary-0.0.1-eibbq7LqAQCdYHZTWRFOFO8sTIIcaTLYnlKQErGAis4V",
+            .url = "git+https://git.0918273.xyz/xzyylx00/aslibrary.git#30dc56c7e7016f8363233347a2232974a897adf3",
+            .hash = "aslibrary-0.0.1-eibbq1cCAgC-ccpBb7Gy4QsbCiduHRQm1Z0B2q50q-U_",
         },
     },
     .minimum_zig_version = "0.16.0",

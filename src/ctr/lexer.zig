@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 const std = @import("std");
+const Module = @import("module.zig");
 
 pub const Token = struct {
     pub const Kind = enum {
@@ -208,7 +209,7 @@ pub fn init(string: [:0]const u8) Lexer {
     };
 }
 
-pub fn next(lexer: *Lexer) Token {
+pub fn next(lexer: *Lexer, error_report_array: ?*Module.ErrorReportArray) error{OutOfCapacity}!Token {
     if (lexer.buffer.len == lexer.index) {
         return Token{
             .kind = .eof,
@@ -432,12 +433,40 @@ pub fn next(lexer: *Lexer) Token {
             lexer.pos += 1;
             switch (lexer.buffer[lexer.index]) {
                 0 => if (lexer.index == lexer.buffer.len) {
+                    if (error_report_array) |_error_report_array| {
+                        try _error_report_array.addReport(.{
+                            .position = .{
+                                .line = token.line,
+                                .pos = token.pos,
+                            },
+                            .data = .{
+                                .invalid_character = .{
+                                    .found = "\\0",
+                                },
+                            },
+                            .kind = .invalid_character,
+                        });
+                    }
                     token.kind = .invalid;
                     continue :state .commit;
                 } else {
                     continue :state .invalid;
                 },
                 '\n' => {
+                    if (error_report_array) |_error_report_array| {
+                        try _error_report_array.addReport(.{
+                            .position = .{
+                                .line = token.line,
+                                .pos = token.pos,
+                            },
+                            .data = .{
+                                .invalid_character = .{
+                                    .found = "\\n",
+                                },
+                            },
+                            .kind = .invalid_character,
+                        });
+                    }
                     token.kind = .invalid;
                     continue :state .commit;
                 },
@@ -640,19 +669,6 @@ pub fn peek(lexer: *const Lexer) ?Token {
     return token;
 }
 
-pub fn skipUntil(lexer: *Lexer, comptime until: []Token.Kind) void {
-    var local_lexer = lexer.*;
-    blk: while (true) {
-        const token = local_lexer.next();
-        inline for (until) |until_kind| {
-            if (token.kind == until_kind) {
-                break :blk;
-            }
-        }
-    }
-    lexer.* = local_lexer;
-}
-
 pub fn dump(lexer: *Lexer, token: *const Token) void {
     std.log.debug("{d}:{d} {s} \"{s}\"", .{ token.line, token.pos, @tagName(token.kind), lexer.buffer[token.start..token.end] });
 }
@@ -660,11 +676,11 @@ pub fn dump(lexer: *Lexer, token: *const Token) void {
 fn testLexer(source: [:0]const u8, expected_token_kinds: []const Token.Kind) !void {
     var lexer = Lexer.init(source);
     for (expected_token_kinds) |expected_token_kind| {
-        const token = lexer.next();
+        const token = try lexer.next(null);
         try std.testing.expectEqual(expected_token_kind, token.kind);
     }
 
-    const last_token = lexer.next();
+    const last_token = try lexer.next(null);
     try std.testing.expectEqual(Token.Kind.eof, last_token.kind);
     try std.testing.expectEqual(source.len, last_token.start);
     try std.testing.expectEqual(source.len, last_token.end);
@@ -674,7 +690,7 @@ pub fn dumpLexer(source: [:0]const u8) !void {
     var lexer = Lexer.init(source);
 
     while (true) {
-        const token = lexer.next();
+        const token = try lexer.next(null);
         lexer.dump(&token);
         if (token.kind == .invalid or token.kind == .eof) {
             return;
