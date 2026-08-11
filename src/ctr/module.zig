@@ -101,9 +101,15 @@ pub const ErrorReport = struct {
             .expected_token => {
                 std.log.debug("Expected Token at {d}:{d}, expect {s}", .{ error_report.position.line, error_report.position.pos, error_report.data.expected_token.expected });
             },
-            .expected_expression => {},
-            .expected_assignment_target => {},
-            .invalid_character => {},
+            .expected_expression => {
+                std.log.debug("Expected Expression at {d}:{d}", .{ error_report.position.line, error_report.position.pos });
+            },
+            .expected_assignment_target => {
+                std.log.debug("Expected Assignment Target at {d}:{d}", .{ error_report.position.line, error_report.position.pos });
+            },
+            .invalid_character => {
+                std.log.debug("Invalid Character at {d}:{d}", .{ error_report.position.line, error_report.position.pos });
+            },
         }
     }
 };
@@ -152,30 +158,27 @@ pub const TokenArray = struct {
     _current: ?usize,
 
     pub fn peek(token_array: *const TokenArray) ?Lexer.Token {
-        var _current: ?usize = token_array._current;
-        if (_current == null) {
-            _current = 0;
-        }
-
-        if (token_array.tokens[_current.?].kind == .eof or token_array.tokens[_current.?].kind == .invalid) {
+        var local_token_array = token_array.*;
+        const token = local_token_array.next();
+        if (token.kind == .eof) {
             return null;
-        } else {
-            return token_array.tokens[_current.?];
         }
+        return token;
     }
 
     pub fn next(token_array: *TokenArray) Lexer.Token {
         if (token_array._current == null) {
             token_array._current = 0;
+        } else {
+            token_array._current = token_array._current.? + 1;
         }
 
         if (token_array.tokens[token_array._current.?].kind == .eof) {
-            return token_array.tokens[token_array._current.?];
+            token_array._current = token_array._current.? - 1;
+            return token_array.tokens[token_array._current.? + 1];
         } else if (token_array.tokens[token_array._current.?].kind == .invalid) {
-            token_array._current = token_array._current.? + 1;
             return token_array.tokens[token_array._current.?];
         } else {
-            token_array._current = token_array._current.? + 1;
             return token_array.tokens[token_array._current.?];
         }
     }

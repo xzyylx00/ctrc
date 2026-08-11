@@ -575,15 +575,6 @@ fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenA
     }
 
     if (first_target_node_index == null) {
-        // XXX Error
-        try error_report_array.addReport(
-            .{
-                .data = undefined,
-                .kind = .expected_assignment_target,
-                .position = .toPosition(lexer.current()),
-            },
-        );
-
         ast_node_array.free(assignment_node_index) catch unreachable;
         return null;
     }
@@ -604,7 +595,7 @@ fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenA
             });
 
             // Skip
-            lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
             releaseASTNode(ast_node_array, first_target_node_index.?);
             ast_node_array.free(assignment_node_index) catch unreachable;
@@ -626,7 +617,7 @@ fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenA
         });
 
         // Skip
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
         releaseASTNode(ast_node_array, first_target_node_index.?);
         ast_node_array.free(assignment_node_index) catch unreachable;
@@ -645,7 +636,7 @@ fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenA
         });
 
         // Skip
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
         releaseASTNode(ast_node_array, first_target_node_index.?);
         ast_node_array.free(assignment_node_index) catch unreachable;
@@ -682,7 +673,7 @@ fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenA
             });
 
             // Skip
-            lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
             releaseASTNode(ast_node_array, first_target_node_index.?);
             releaseASTNode(ast_node_array, expression_node_index.?);
@@ -702,7 +693,7 @@ fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenA
         });
 
         // Skip
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
         releaseASTNode(ast_node_array, first_target_node_index.?);
         releaseASTNode(ast_node_array, expression_node_index.?);
@@ -759,7 +750,7 @@ fn parseAssignmentTarget(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArra
                     });
 
                     // Skip
-                    lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+                    lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
                     ast_node_array.free(assignment_target_node_index) catch unreachable;
                     return null;
@@ -773,12 +764,11 @@ fn parseAssignmentTarget(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArra
                         },
                     },
                     .kind = .expected_token,
-                    .position = .toPosition(lexer.next()),
+                    .position = .toPosition(lexer.current()),
                 });
 
                 // Skip
                 lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
-
                 ast_node_array.free(assignment_target_node_index) catch unreachable;
                 return null;
             }
@@ -801,20 +791,6 @@ fn parseAssignmentTarget(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArra
             ast_node_array.set(assignment_target_node_index, assignment_target_node) catch unreachable;
             return assignment_target_node_index;
         } else {
-            // XXX Error
-            try error_report_array.addReport(.{
-                .data = .{
-                    .expected_token = .{
-                        .expected = "Identifer, 'in', 'out', 'inout', 'break', or 'continue'",
-                    },
-                },
-                .kind = .expected_token,
-                .position = .toPosition(lexer.next()),
-            });
-
-            // Skip
-            lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
-
             ast_node_array.free(assignment_target_node_index) catch unreachable;
             return null;
         }
@@ -858,7 +834,7 @@ fn parseCallStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, 
                 });
 
                 // Skip
-                lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+                lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
                 releaseASTNode(ast_node_array, call_expression_node_index);
                 ast_node_array.free(call_statement_node_index) catch unreachable;
@@ -876,7 +852,7 @@ fn parseCallStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, 
             });
 
             // Skip
-            lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
             releaseASTNode(ast_node_array, call_expression_node_index);
             ast_node_array.free(call_statement_node_index) catch unreachable;
@@ -953,7 +929,7 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
                 });
 
                 // Skip
-                lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+                lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
                 if (first_call_parameter_node_index) |_first_call_parameter_node_index| {
                     releaseASTNode(ast_node_array, _first_call_parameter_node_index);
@@ -979,7 +955,7 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
                 });
 
                 // Skip
-                lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+                lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
                 if (first_call_parameter_node_index) |_first_call_parameter_node_index| {
                     releaseASTNode(ast_node_array, _first_call_parameter_node_index);
@@ -1003,7 +979,7 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
             });
 
             // Skip
-            lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
             if (first_call_parameter_node_index) |_first_call_parameter_node_index| {
                 releaseASTNode(ast_node_array, _first_call_parameter_node_index);
@@ -1290,7 +1266,7 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
                 .position = .toPosition(_peek_token),
             });
 
-            lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
             ast_node_array.free(type_expression_node_index) catch unreachable;
             return null;
@@ -1324,7 +1300,7 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
         ast_node_array.free(type_expression_node_index) catch unreachable;
         return null;
@@ -1347,7 +1323,7 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
                 .position = .toPosition(_peek_token),
             });
 
-            lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
             releaseASTNode(ast_node_array, expression_node_index.?);
             ast_node_array.free(type_expression_node_index) catch unreachable;
@@ -1365,7 +1341,7 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
         releaseASTNode(ast_node_array, expression_node_index.?);
 
@@ -1391,7 +1367,7 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
                 .position = .toPosition(_peek_token),
             });
 
-            lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             releaseASTNode(ast_node_array, expression_node_index.?);
 
             ast_node_array.free(type_expression_node_index) catch unreachable;
@@ -1409,7 +1385,7 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
         releaseASTNode(ast_node_array, expression_node_index.?);
 
@@ -1460,7 +1436,7 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
                 .position = .toPosition(lexer.current()),
             });
 
-            lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
             releaseASTNode(ast_node_array, expression_node_index.?);
             ast_node_array.free(type_expression_node_index) catch unreachable;
@@ -1485,7 +1461,7 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
                 .position = .toPosition(_peek_token),
             });
 
-            lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(type_expression_node_index) catch unreachable;
             if (first_type_entry_node_index) |_first_type_entry_node_index| {
                 releaseASTNode(ast_node_array, _first_type_entry_node_index);
@@ -1505,7 +1481,7 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(type_expression_node_index) catch unreachable;
         if (first_type_entry_node_index) |_first_type_entry_node_index| {
             releaseASTNode(ast_node_array, _first_type_entry_node_index);
@@ -1554,7 +1530,7 @@ fn parseTypeEntry(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, erro
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(type_entry_node_index) catch unreachable;
         return null;
     }
@@ -1594,7 +1570,7 @@ fn parseTypeEntry(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, erro
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
         ast_node_array.free(type_entry_node_index) catch unreachable;
         return null;
@@ -1650,7 +1626,7 @@ fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
         ast_node_array.free(function_parameter_node_index) catch unreachable;
         return null;
@@ -1675,7 +1651,7 @@ fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
                 .position = .toPosition(_peek_token),
             });
 
-            lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(function_parameter_node_index) catch unreachable;
             return null;
         }
@@ -1691,7 +1667,7 @@ fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(function_parameter_node_index) catch unreachable;
         return null;
     }
@@ -1713,7 +1689,7 @@ fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
                 .position = .toPosition(_peek_token),
             });
 
-            lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(function_parameter_node_index) catch unreachable;
             return null;
         }
@@ -1729,7 +1705,7 @@ fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
         ast_node_array.free(function_parameter_node_index) catch unreachable;
         return null;
@@ -1765,7 +1741,7 @@ fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(function_parameter_node_index) catch unreachable;
         return null;
     }
@@ -1796,7 +1772,7 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenAr
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(function_expression_node_index) catch unreachable;
         return null;
     }
@@ -1818,7 +1794,7 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenAr
                 .position = .toPosition(_peek_token),
             });
 
-            lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(function_expression_node_index) catch unreachable;
             return null;
         }
@@ -1834,7 +1810,7 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenAr
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(function_expression_node_index) catch unreachable;
         return null;
     }
@@ -1885,7 +1861,7 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenAr
                 .position = .toPosition(lexer.current()),
             });
 
-            lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(function_expression_node_index) catch unreachable;
             return null;
         }
@@ -1908,7 +1884,7 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenAr
                 .position = .toPosition(_peek_token),
             });
 
-            lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
             ast_node_array.free(function_expression_node_index) catch unreachable;
             if (first_function_parameter_node_index) |_first_function_parameter_node_index| {
@@ -1928,7 +1904,7 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenAr
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(function_expression_node_index) catch unreachable;
         if (first_function_parameter_node_index) |_first_function_parameter_node_index| {
             releaseASTNode(ast_node_array, _first_function_parameter_node_index);
@@ -1970,35 +1946,10 @@ fn parseLabelExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
         if (_peek_token.kind == .colon) {
             _ = lexer.next();
         } else {
-            // XXX Error
-            try error_report_array.addReport(.{
-                .data = .{
-                    .unexpected_token = .{
-                        .expected = "':'",
-                        .found = .toRange(_peek_token),
-                    },
-                },
-                .kind = .unexpected_token,
-                .position = .toPosition(_peek_token),
-            });
-
-            lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
             ast_node_array.free(label_expression_node_index) catch unreachable;
             return null;
         }
     } else {
-        // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "':'",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
         ast_node_array.free(label_expression_node_index) catch unreachable;
         return null;
     }
@@ -2023,7 +1974,7 @@ fn parseLabelExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(label_expression_node_index) catch unreachable;
         return null;
     }
@@ -2054,7 +2005,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(match_expression_node_index) catch unreachable;
         return null;
     }
@@ -2076,7 +2027,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
                 .position = .toPosition(_peek_token),
             });
 
-            lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(match_expression_node_index) catch unreachable;
             return null;
         }
@@ -2092,7 +2043,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(match_expression_node_index) catch unreachable;
         return null;
     }
@@ -2108,7 +2059,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(match_expression_node_index) catch unreachable;
         return null;
     }
@@ -2130,7 +2081,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
                 .position = .toPosition(_peek_token),
             });
 
-            lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(match_expression_node_index) catch unreachable;
             return null;
         }
@@ -2146,7 +2097,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(match_expression_node_index) catch unreachable;
         return null;
     }
@@ -2168,7 +2119,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
                 .position = .toPosition(_peek_token),
             });
 
-            lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(match_expression_node_index) catch unreachable;
             return null;
         }
@@ -2184,7 +2135,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(match_expression_node_index) catch unreachable;
         return null;
     }
@@ -2232,7 +2183,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
                 .position = .toPosition(lexer.current()),
             });
 
-            lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(match_expression_node_index) catch unreachable;
             return null;
         }
@@ -2255,7 +2206,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
                 .position = .toPosition(_peek_token),
             });
 
-            lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             if (first_match_case_node_index) |_first_match_case_node_index| {
                 releaseASTNode(ast_node_array, _first_match_case_node_index);
             }
@@ -2274,7 +2225,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         if (first_match_case_node_index) |_first_match_case_node_index| {
             releaseASTNode(ast_node_array, _first_match_case_node_index);
         }
@@ -2321,7 +2272,7 @@ fn parseMatchCase(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, erro
                 .position = .toPosition(_peek_token),
             });
 
-            lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(match_case_node_index) catch unreachable;
             return null;
         }
@@ -2337,7 +2288,7 @@ fn parseMatchCase(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, erro
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(match_case_node_index) catch unreachable;
         return null;
     }
@@ -2367,7 +2318,7 @@ fn parseMatchCase(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, erro
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(match_case_node_index) catch unreachable;
         return null;
     }
@@ -2419,7 +2370,7 @@ fn parseAttributedExpression(ast_node_array: *ASTNodeArray, lexer: *Module.Token
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(attributed_expression_node_index) catch unreachable;
         return null;
     }
@@ -2452,7 +2403,7 @@ fn parseBreakStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(break_statement_node_index) catch unreachable;
         return null;
     }
@@ -2476,7 +2427,7 @@ fn parseBreakStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
                             .position = .toPosition(peek_token),
                         });
 
-                        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+                        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
                         releaseASTNode(ast_node_array, expression);
                         ast_node_array.free(break_statement_node_index) catch unreachable;
                         return null;
@@ -2495,7 +2446,7 @@ fn parseBreakStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
                         .position = .toPosition(lexer.current()),
                     });
 
-                    lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+                    lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
                     releaseASTNode(ast_node_array, expression);
                     ast_node_array.free(break_statement_node_index) catch unreachable;
                     return null;
@@ -2523,7 +2474,7 @@ fn parseBreakStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
                     .position = .toPosition(lexer.current()),
                 });
 
-                lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+                lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
                 ast_node_array.free(break_statement_node_index) catch unreachable;
                 return null;
             }
@@ -2540,7 +2491,7 @@ fn parseBreakStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
                 .position = .toPosition(_target_token),
             });
 
-            lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(break_statement_node_index) catch unreachable;
             return null;
         }
@@ -2556,7 +2507,7 @@ fn parseBreakStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(break_statement_node_index) catch unreachable;
         return null;
     }
@@ -2586,7 +2537,7 @@ fn parseContinueStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(continue_statement_node_index) catch unreachable;
         return null;
     }
@@ -2610,7 +2561,7 @@ fn parseContinueStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
                             .position = .toPosition(peek_token),
                         });
 
-                        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+                        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
                         releaseASTNode(ast_node_array, expression);
                         ast_node_array.free(continue_statement_node_index) catch unreachable;
                         return null;
@@ -2629,7 +2580,7 @@ fn parseContinueStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
                         .position = .toPosition(lexer.current()),
                     });
 
-                    lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+                    lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
                     releaseASTNode(ast_node_array, expression);
                     ast_node_array.free(continue_statement_node_index) catch unreachable;
                     return null;
@@ -2657,7 +2608,7 @@ fn parseContinueStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
                     .position = .toPosition(lexer.current()),
                 });
 
-                lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+                lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
                 ast_node_array.free(continue_statement_node_index) catch unreachable;
                 return null;
             }
@@ -2674,7 +2625,7 @@ fn parseContinueStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
                 .position = .toPosition(_target_token),
             });
 
-            lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(continue_statement_node_index) catch unreachable;
             return null;
         }
@@ -2690,7 +2641,7 @@ fn parseContinueStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
             .position = .toPosition(lexer.current()),
         });
 
-        lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(continue_statement_node_index) catch unreachable;
         return null;
     }
