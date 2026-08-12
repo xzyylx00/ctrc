@@ -18,9 +18,11 @@ pub fn main(args: std.process.Init) !u8 {
 
     try module.lex(test_file[0..]);
     try module.parse();
+    if (module.ast_node_root) |root| {
+        try Parser.dump(&module.ast_node_array, module.source.?, root, 0);
+    }
     module.report();
     std.debug.print("{d} {any}\n", .{ module.error_report_array.used, module.ast_node_root });
-
     return 0;
 }
 
