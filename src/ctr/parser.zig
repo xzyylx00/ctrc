@@ -18,6 +18,8 @@ const aslib = @import("aslib");
 const std = @import("std");
 const Lexer = @import("lexer.zig");
 const Module = @import("module.zig");
+const ErrorReportArray = @import("error.zig").ErrorReportArray;
+const TokenArray = @import("token_array.zig").TokenArray;
 const Token = Lexer.Token;
 
 pub const ASTNode = struct {
@@ -100,13 +102,8 @@ pub const ASTNode = struct {
             identifier,
         };
 
-        const Position = struct {
-            start: usize,
-            end: usize,
-        };
-
         kind: LiteralKind,
-        position: Position,
+        position: Module.Range,
     };
 
     const TypeExpression = struct {
@@ -115,12 +112,7 @@ pub const ASTNode = struct {
     };
 
     const TypeEntry = struct {
-        const Name = struct {
-            start: usize,
-            end: usize,
-        };
-
-        name: Name,
+        name: Module.Range,
         expression: ?usize,
         next: ?usize,
     };
@@ -173,10 +165,6 @@ pub const ASTNode = struct {
     };
 
     const FunctionParameter = struct {
-        const Name = struct {
-            start: usize,
-            end: usize,
-        };
         const AccessAttribute = enum {
             in,
             out,
@@ -184,7 +172,7 @@ pub const ASTNode = struct {
         };
 
         access_attribute: AccessAttribute,
-        name: Name,
+        name: Module.Range,
         expression: usize,
         next: ?usize,
     };
@@ -195,20 +183,12 @@ pub const ASTNode = struct {
     };
 
     const BreakStatement = struct {
-        const Name = struct {
-            start: usize,
-            end: usize,
-        };
-        name: Name,
+        name: Module.Range,
         expression: usize,
     };
 
     const ContinueStatement = struct {
-        const Name = struct {
-            start: usize,
-            end: usize,
-        };
-        name: Name,
+        name: Module.Range,
         expression: usize,
     };
 
@@ -257,9 +237,9 @@ fn releaseASTNode(ast_node_array: *ASTNodeArray, node_index: usize) void {
     }
 }
 
-pub fn parseRoot(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, error_report_array: *Module.ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Root at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Root at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
+pub fn parseRoot(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Root at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Root at {any}", .{Module.Position.toPosition(lexer.current())});
     const ast_node_index = try ast_node_array.alloc();
 
     const containor_node_index = try parseBlockExpressionContent(ast_node_array, lexer, error_report_array);
@@ -270,16 +250,7 @@ pub fn parseRoot(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, error
             releaseASTNode(ast_node_array, _containor_node_index);
             ast_node_array.free(ast_node_index) catch unreachable;
 
-            try error_report_array.addReport(.{
-                .kind = .unexpected_token,
-                .position = .toPosition(eof_token),
-                .data = .{
-                    .unexpected_token = .{
-                        .expected = "\\0",
-                        .found = .toRange(eof_token),
-                    },
-                },
-            });
+            try error_report_array.addUnexpectedTokenReport("\\0", .toRange(eof_token), .toPosition(eof_token));
 
             return null;
         }
@@ -297,20 +268,16 @@ pub fn parseRoot(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, error
         return ast_node_index;
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .kind = .expected_expression,
-            .position = .toPosition(lexer.current()),
-            .data = undefined,
-        });
+        try error_report_array.addExpectedExpressionReport(.toPosition(lexer.current()));
 
         ast_node_array.free(ast_node_index) catch unreachable;
         return null;
     }
 }
 
-fn parseBlockExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, error_report_array: *Module.ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Block Expression at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Block Expression at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
+fn parseBlockExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Block Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Block Expression at {any}", .{Module.Position.toPosition(lexer.current())});
     const lbrace_token = lexer.next();
     if (lbrace_token.kind == .l_brace) {
         const context_node = try parseBlockExpressionContent(ast_node_array, lexer, error_report_array);
@@ -320,16 +287,7 @@ fn parseBlockExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
                 return _context_node;
             } else {
                 // XXX Error
-                try error_report_array.addReport(.{
-                    .position = .toPosition(rbrace_token),
-                    .kind = .unexpected_token,
-                    .data = .{
-                        .unexpected_token = .{
-                            .expected = "}",
-                            .found = .toRange(rbrace_token),
-                        },
-                    },
-                });
+                try error_report_array.addUnexpectedTokenReport("}", .toRange(rbrace_token), .toPosition(rbrace_token));
             }
             return null;
         } else {
@@ -338,23 +296,14 @@ fn parseBlockExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
         }
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .position = .toPosition(lbrace_token),
-            .kind = .unexpected_token,
-            .data = .{
-                .unexpected_token = .{
-                    .expected = "{",
-                    .found = .toRange(lbrace_token),
-                },
-            },
-        });
+        try error_report_array.addUnexpectedTokenReport("{", .toRange(lbrace_token), .toPosition(lbrace_token));
         return null;
     }
 }
 
-fn parseBlockExpressionContent(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, error_report_array: *Module.ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing BlockExpressionContent at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving BlockExpressionContent at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
+fn parseBlockExpressionContent(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing BlockExpressionContent at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving BlockExpressionContent at {any}", .{Module.Position.toPosition(lexer.current())});
     const ast_node_index = try ast_node_array.alloc();
 
     var block_expression_node = ASTNode{
@@ -416,11 +365,7 @@ fn parseBlockExpressionContent(ast_node_array: *ASTNodeArray, lexer: *Module.Tok
         return ast_node_index;
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = undefined,
-            .kind = .expected_expression,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedExpressionReport(.toPosition(lexer.current()));
 
         ast_node_array.free(ast_node_index) catch unreachable;
         if (first_statement_node_index) |_first_statement_node_index| {
@@ -430,9 +375,9 @@ fn parseBlockExpressionContent(ast_node_array: *ASTNodeArray, lexer: *Module.Tok
     }
 }
 
-fn parseStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, error_report_array: *Module.ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Statement at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Statement at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
+fn parseStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Statement at {any}", .{Module.Position.toPosition(lexer.current())});
     const statement_node_index = try ast_node_array.alloc();
     const previous_lexer = lexer.*;
 
@@ -516,9 +461,9 @@ fn parseStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, erro
     return null;
 }
 
-fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, error_report_array: *Module.ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Assignment Statement at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Assignment Statement at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
+fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Assignment Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Assignment Statement at {any}", .{Module.Position.toPosition(lexer.current())});
     const assignment_node_index = try ast_node_array.alloc();
 
     var first_target_node_index: ?usize = null;
@@ -555,16 +500,7 @@ fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenA
             }
         } else {
             // XXX Error
-            try error_report_array.addReport(.{
-                .kind = .unexpected_token,
-                .data = .{
-                    .unexpected_token = .{
-                        .expected = "',' or '}'",
-                        .found = .toRange(lexer.current()),
-                    },
-                },
-                .position = .toPosition(lexer.current()),
-            });
+            try error_report_array.addUnexpectedTokenReport("',' or '}'", .toRange(lexer.current()), .toPosition(lexer.current()));
 
             if (first_target_node_index) |_first_target_node_index| {
                 releaseASTNode(ast_node_array, _first_target_node_index);
@@ -583,16 +519,11 @@ fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenA
     if (equal_token) |_equal_token| {
         if (_equal_token.kind != .equal) {
             // XXX Error
-            try error_report_array.addReport(.{
-                .data = .{
-                    .unexpected_token = .{
-                        .expected = "'='",
-                        .found = .toRange(_equal_token),
-                    },
-                },
-                .kind = .unexpected_token,
-                .position = .toPosition(_equal_token),
-            });
+            try error_report_array.addUnexpectedTokenReport(
+                "'='",
+                .toRange(_equal_token),
+                .toPosition(_equal_token),
+            );
 
             // Skip
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
@@ -605,16 +536,7 @@ fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenA
         _ = lexer.next();
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .unexpected_token = .{
-                    .expected = "'='",
-                    .found = .toRange(lexer.current()),
-                },
-            },
-            .kind = .unexpected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addUnexpectedTokenReport("'='", .toRange(lexer.current()), .toPosition(lexer.current()));
 
         // Skip
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
@@ -629,11 +551,7 @@ fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenA
         expression_node_index = _expression_node_index;
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = undefined,
-            .kind = .expected_expression,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedExpressionReport(.toPosition(lexer.current()));
 
         // Skip
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
@@ -661,16 +579,11 @@ fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenA
             return assignment_node_index;
         } else {
             // XXX Error
-            try error_report_array.addReport(.{
-                .data = .{
-                    .unexpected_token = .{
-                        .expected = "';'",
-                        .found = .toRange(_semicolon_token),
-                    },
-                },
-                .kind = .unexpected_token,
-                .position = .toPosition(_semicolon_token),
-            });
+            try error_report_array.addUnexpectedTokenReport(
+                "';'",
+                .toRange(_semicolon_token),
+                .toPosition(_semicolon_token),
+            );
 
             // Skip
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
@@ -682,15 +595,7 @@ fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenA
     } else {
         // XXX Error
 
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "';'",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport("';'", .toPosition(lexer.current()));
 
         // Skip
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
@@ -702,9 +607,9 @@ fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenA
     }
 }
 
-fn parseAssignmentTarget(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, error_report_array: *Module.ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Assignment Target at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Assignment Target at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
+fn parseAssignmentTarget(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Assignment Target at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Assignment Target at {any}", .{Module.Position.toPosition(lexer.current())});
     const assignment_target_node_index = try ast_node_array.alloc();
 
     const peek_token = lexer.peek();
@@ -738,16 +643,11 @@ fn parseAssignmentTarget(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArra
                     return assignment_target_node_index;
                 } else {
                     // XXX Error
-                    try error_report_array.addReport(.{
-                        .data = .{
-                            .unexpected_token = .{
-                                .expected = "Identifer",
-                                .found = .toRange(_name_token),
-                            },
-                        },
-                        .kind = .unexpected_token,
-                        .position = .toPosition(_name_token),
-                    });
+                    try error_report_array.addUnexpectedTokenReport(
+                        "Identifer",
+                        .toRange(_name_token),
+                        .toPosition(_name_token),
+                    );
 
                     // Skip
                     lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
@@ -757,15 +657,10 @@ fn parseAssignmentTarget(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArra
                 }
             } else {
                 // XXX Error
-                try error_report_array.addReport(.{
-                    .data = .{
-                        .expected_token = .{
-                            .expected = "Identifer",
-                        },
-                    },
-                    .kind = .expected_token,
-                    .position = .toPosition(lexer.current()),
-                });
+                try error_report_array.addExpectedTokenReport(
+                    "Identifer",
+                    .toPosition(lexer.current()),
+                );
 
                 // Skip
                 lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
@@ -800,9 +695,9 @@ fn parseAssignmentTarget(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArra
     }
 }
 
-fn parseCallStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, error_report_array: *Module.ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Call Statement at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Call Statement at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
+fn parseCallStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Call Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Call Statement at {any}", .{Module.Position.toPosition(lexer.current())});
     const call_statement_node_index = try ast_node_array.alloc();
 
     if (try parseCallExpression(ast_node_array, lexer, error_report_array)) |call_expression_node_index| {
@@ -822,16 +717,11 @@ fn parseCallStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, 
                 ast_node_array.set(call_statement_node_index, call_statement_node) catch unreachable;
                 return call_statement_node_index;
             } else {
-                try error_report_array.addReport(.{
-                    .data = .{
-                        .unexpected_token = .{
-                            .expected = "';'",
-                            .found = .toRange(_semicolon_token),
-                        },
-                    },
-                    .kind = .unexpected_token,
-                    .position = .toPosition(_semicolon_token),
-                });
+                try error_report_array.addUnexpectedTokenReport(
+                    "';'",
+                    .toRange(_semicolon_token),
+                    .toPosition(_semicolon_token),
+                );
 
                 // Skip
                 lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
@@ -841,15 +731,10 @@ fn parseCallStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, 
                 return null;
             }
         } else {
-            try error_report_array.addReport(.{
-                .data = .{
-                    .expected_token = .{
-                        .expected = "';'",
-                    },
-                },
-                .kind = .expected_token,
-                .position = .toPosition(lexer.current()),
-            });
+            try error_report_array.addExpectedTokenReport(
+                "';'",
+                .toPosition(lexer.current()),
+            );
 
             // Skip
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
@@ -864,9 +749,9 @@ fn parseCallStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, 
     }
 }
 
-fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, error_report_array: *Module.ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Call Expression at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Call Expression at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
+fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Call Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Call Expression at {any}", .{Module.Position.toPosition(lexer.current())});
     const call_expression_node_index = try ast_node_array.alloc();
 
     if (try parseLiteralExpression(ast_node_array, lexer, error_report_array)) |target_node_index| {
@@ -918,15 +803,10 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
             } else {
                 // XXX Error
 
-                try error_report_array.addReport(.{
-                    .data = .{
-                        .expected_token = .{
-                            .expected = "',', or ')'",
-                        },
-                    },
-                    .kind = .expected_token,
-                    .position = .toPosition(lexer.current()),
-                });
+                try error_report_array.addExpectedTokenReport(
+                    "',', or ')'",
+                    .toPosition(lexer.current()),
+                );
 
                 // Skip
                 lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
@@ -943,16 +823,11 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
             if (_peek_token.kind != .r_paren) {
                 // XXX Error
 
-                try error_report_array.addReport(.{
-                    .data = .{
-                        .unexpected_token = .{
-                            .expected = "')'",
-                            .found = .toRange(_peek_token),
-                        },
-                    },
-                    .kind = .unexpected_token,
-                    .position = .toPosition(_peek_token),
-                });
+                try error_report_array.addUnexpectedTokenReport(
+                    "')'",
+                    .toRange(_peek_token),
+                    .toPosition(_peek_token),
+                );
 
                 // Skip
                 lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
@@ -968,15 +843,10 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
             }
         } else {
             // XXX Error
-            try error_report_array.addReport(.{
-                .data = .{
-                    .expected_token = .{
-                        .expected = "')'",
-                    },
-                },
-                .kind = .expected_token,
-                .position = .toPosition(lexer.current()),
-            });
+            try error_report_array.addExpectedTokenReport(
+                "')'",
+                .toPosition(lexer.current()),
+            );
 
             // Skip
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
@@ -1006,9 +876,9 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
     }
 }
 
-fn parseCallParameter(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, error_report_array: *Module.ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Call Parameter at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Call Parameter at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
+fn parseCallParameter(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Call Parameter at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Call Parameter at {any}", .{Module.Position.toPosition(lexer.current())});
     const call_parameter_node_index = try ast_node_array.alloc();
 
     if (try parseExpression(ast_node_array, lexer, error_report_array)) |expression_node_index| {
@@ -1028,9 +898,9 @@ fn parseCallParameter(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, 
     return null;
 }
 
-fn parseExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, error_report_array: *Module.ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Expression at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Expression at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
+fn parseExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Expression at {any}", .{Module.Position.toPosition(lexer.current())});
     const expression_node_index = try ast_node_array.alloc();
     const previous_lexer = lexer.*;
 
@@ -1174,10 +1044,10 @@ fn parseExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, err
     return null;
 }
 
-fn parseLiteralExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, error_report_array: *Module.ErrorReportArray) error{OutOfCapacity}!?usize {
+fn parseLiteralExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
     _ = error_report_array;
-    std.log.debug("Parsing Literal Expression at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Literal Expression at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
+    std.log.debug("Parsing Literal Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Literal Expression at {any}", .{Module.Position.toPosition(lexer.current())});
     const literal_expression_node_index = try ast_node_array.alloc();
 
     const peek_token = lexer.peek();
@@ -1219,9 +1089,9 @@ fn parseLiteralExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
     }
 }
 
-fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, error_report_array: *Module.ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Type Expression at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Type Expression at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
+fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Type Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Type Expression at {any}", .{Module.Position.toPosition(lexer.current())});
     const type_expression_node_index = try ast_node_array.alloc();
 
     var peek_token = lexer.peek();
@@ -1234,15 +1104,10 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
         }
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "'type'",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport(
+            "'type'",
+            .toPosition(lexer.current()),
+        );
 
         ast_node_array.free(type_expression_node_index) catch unreachable;
         return null;
@@ -1255,16 +1120,11 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
         } else {
             // XXX Error
 
-            try error_report_array.addReport(.{
-                .data = .{
-                    .unexpected_token = .{
-                        .expected = "'('",
-                        .found = .toRange(_peek_token),
-                    },
-                },
-                .kind = .unexpected_token,
-                .position = .toPosition(_peek_token),
-            });
+            try error_report_array.addUnexpectedTokenReport(
+                "'('",
+                .toRange(_peek_token),
+                .toPosition(_peek_token),
+            );
 
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
@@ -1274,15 +1134,10 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
     } else {
         // XXX Error
 
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "'('",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport(
+            "'('",
+            .toPosition(lexer.current()),
+        );
 
         ast_node_array.free(type_expression_node_index) catch unreachable;
         return null;
@@ -1294,11 +1149,7 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
     } else {
         // XXX Error
 
-        try error_report_array.addReport(.{
-            .data = undefined,
-            .kind = .expected_expression,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedExpressionReport(.toPosition(lexer.current()));
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
@@ -1312,16 +1163,12 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
             _ = lexer.next();
         } else {
             // XXX Error
-            try error_report_array.addReport(.{
-                .data = .{
-                    .unexpected_token = .{
-                        .expected = "')'",
-                        .found = .toRange(_peek_token),
-                    },
-                },
-                .kind = .unexpected_token,
-                .position = .toPosition(_peek_token),
-            });
+            try error_report_array.addUnexpectedTokenReport(
+                "')'",
+                .toRange(_peek_token),
+
+                .toPosition(_peek_token),
+            );
 
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
@@ -1331,15 +1178,10 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
         }
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "')'",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport(
+            "')'",
+            .toPosition(lexer.current()),
+        );
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
@@ -1356,16 +1198,11 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
         } else {
             // XXX Error
 
-            try error_report_array.addReport(.{
-                .data = .{
-                    .unexpected_token = .{
-                        .expected = "'{'",
-                        .found = .toRange(_peek_token),
-                    },
-                },
-                .kind = .unexpected_token,
-                .position = .toPosition(_peek_token),
-            });
+            try error_report_array.addUnexpectedTokenReport(
+                "'{'",
+                .toRange(_peek_token),
+                .toPosition(_peek_token),
+            );
 
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             releaseASTNode(ast_node_array, expression_node_index.?);
@@ -1375,15 +1212,10 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
         }
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "'{'",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport(
+            "'{'",
+            .toPosition(lexer.current()),
+        );
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
@@ -1426,15 +1258,7 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
                 _ = lexer.next();
             }
         } else {
-            try error_report_array.addReport(.{
-                .data = .{
-                    .expected_token = .{
-                        .expected = "',', or '}'",
-                    },
-                },
-                .kind = .expected_token,
-                .position = .toPosition(lexer.current()),
-            });
+            try error_report_array.addExpectedTokenReport("',', or '}'", .toPosition(lexer.current()));
 
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
@@ -1450,16 +1274,11 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
             _ = lexer.next();
         } else {
             // XXX Error
-            try error_report_array.addReport(.{
-                .data = .{
-                    .unexpected_token = .{
-                        .expected = "'}'",
-                        .found = .toRange(_peek_token),
-                    },
-                },
-                .kind = .unexpected_token,
-                .position = .toPosition(_peek_token),
-            });
+            try error_report_array.addUnexpectedTokenReport(
+                "'}'",
+                .toRange(_peek_token),
+                .toPosition(_peek_token),
+            );
 
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(type_expression_node_index) catch unreachable;
@@ -1471,15 +1290,10 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
     } else {
         // XXX Error
 
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "'}'",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport(
+            "'}'",
+            .toPosition(lexer.current()),
+        );
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(type_expression_node_index) catch unreachable;
@@ -1503,9 +1317,9 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
     return type_expression_node_index;
 }
 
-fn parseTypeEntry(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, error_report_array: *Module.ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Type Entry at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Type Entry at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
+fn parseTypeEntry(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Type Entry at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Type Entry at {any}", .{Module.Position.toPosition(lexer.current())});
     const type_entry_node_index = try ast_node_array.alloc();
 
     var name_token: Token = undefined;
@@ -1520,15 +1334,10 @@ fn parseTypeEntry(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, erro
         }
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "Identifer, or '}'",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport(
+            "Identifer, or '}'",
+            .toPosition(lexer.current()),
+        );
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(type_entry_node_index) catch unreachable;
@@ -1560,15 +1369,11 @@ fn parseTypeEntry(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, erro
         }
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "':', or '}'",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport(
+            "':', or '}'",
+
+            .toPosition(lexer.current()),
+        );
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
@@ -1599,9 +1404,9 @@ fn parseTypeEntry(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, erro
     return type_entry_node_index;
 }
 
-fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, error_report_array: *Module.ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Function Parameter at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Function Parameter at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
+fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Function Parameter at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Function Parameter at {any}", .{Module.Position.toPosition(lexer.current())});
     const function_parameter_node_index = try ast_node_array.alloc();
 
     var peek_token = lexer.peek();
@@ -1616,15 +1421,7 @@ fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
         }
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "')'",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport("')'", .toPosition(lexer.current()));
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
@@ -1640,16 +1437,7 @@ fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
             _ = lexer.next();
         } else {
             // XXX Error
-            try error_report_array.addReport(.{
-                .data = .{
-                    .unexpected_token = .{
-                        .expected = "Identifer",
-                        .found = .toRange(_peek_token),
-                    },
-                },
-                .kind = .unexpected_token,
-                .position = .toPosition(_peek_token),
-            });
+            try error_report_array.addUnexpectedTokenReport("Identifer", .toRange(_peek_token), .toPosition(_peek_token));
 
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(function_parameter_node_index) catch unreachable;
@@ -1657,15 +1445,10 @@ fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
         }
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "Identifier",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport(
+            "Identifier",
+            .toPosition(lexer.current()),
+        );
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(function_parameter_node_index) catch unreachable;
@@ -1678,16 +1461,11 @@ fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
             _ = lexer.next();
         } else {
             // XXX Error
-            try error_report_array.addReport(.{
-                .data = .{
-                    .unexpected_token = .{
-                        .expected = "':'",
-                        .found = .toRange(_peek_token),
-                    },
-                },
-                .kind = .unexpected_token,
-                .position = .toPosition(_peek_token),
-            });
+            try error_report_array.addUnexpectedTokenReport(
+                "':'",
+                .toRange(_peek_token),
+                .toPosition(_peek_token),
+            );
 
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(function_parameter_node_index) catch unreachable;
@@ -1695,15 +1473,7 @@ fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
         }
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "':'",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport("':", .toPosition(lexer.current()));
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
@@ -1735,11 +1505,9 @@ fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
         return function_parameter_node_index;
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = undefined,
-            .kind = .expected_expression,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedExpressionReport(
+            .toPosition(lexer.current()),
+        );
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(function_parameter_node_index) catch unreachable;
@@ -1747,9 +1515,9 @@ fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
     }
 }
 
-fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, error_report_array: *Module.ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Function Expression at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Function Expression at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
+fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Function Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Function Expression at {any}", .{Module.Position.toPosition(lexer.current())});
     const function_expression_node_index = try ast_node_array.alloc();
 
     var peek_token = lexer.peek();
@@ -1762,15 +1530,7 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenAr
         }
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "'function'",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport("'function'", .toPosition(lexer.current()));
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(function_expression_node_index) catch unreachable;
@@ -1783,16 +1543,11 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenAr
             _ = lexer.next();
         } else {
             // XXX Error
-            try error_report_array.addReport(.{
-                .data = .{
-                    .unexpected_token = .{
-                        .expected = "'('",
-                        .found = .toRange(_peek_token),
-                    },
-                },
-                .kind = .unexpected_token,
-                .position = .toPosition(_peek_token),
-            });
+            try error_report_array.addUnexpectedTokenReport(
+                "'('",
+                .toRange(_peek_token),
+                .toPosition(_peek_token),
+            );
 
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(function_expression_node_index) catch unreachable;
@@ -1800,15 +1555,10 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenAr
         }
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "'('",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport(
+            "'('",
+            .toPosition(lexer.current()),
+        );
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(function_expression_node_index) catch unreachable;
@@ -1851,15 +1601,10 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenAr
             }
         } else {
             // XXX Error
-            try error_report_array.addReport(.{
-                .data = .{
-                    .expected_token = .{
-                        .expected = "',', or ')'",
-                    },
-                },
-                .kind = .expected_token,
-                .position = .toPosition(lexer.current()),
-            });
+            try error_report_array.addExpectedTokenReport(
+                "',', or ')'",
+                .toPosition(lexer.current()),
+            );
 
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(function_expression_node_index) catch unreachable;
@@ -1873,16 +1618,11 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenAr
             _ = lexer.next();
         } else {
             // XXX Error
-            try error_report_array.addReport(.{
-                .data = .{
-                    .unexpected_token = .{
-                        .expected = "')'",
-                        .found = .toRange(_peek_token),
-                    },
-                },
-                .kind = .unexpected_token,
-                .position = .toPosition(_peek_token),
-            });
+            try error_report_array.addUnexpectedTokenReport(
+                "')'",
+                .toRange(_peek_token),
+                .toPosition(_peek_token),
+            );
 
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
@@ -1894,15 +1634,7 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenAr
         }
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "')'",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport("')'", .toPosition(lexer.current()));
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(function_expression_node_index) catch unreachable;
@@ -1928,9 +1660,9 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenAr
     return function_expression_node_index;
 }
 
-fn parseLabelExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, error_report_array: *Module.ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Label Expression at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Label Expression at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
+fn parseLabelExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Label Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Label Expression at {any}", .{Module.Position.toPosition(lexer.current())});
     const label_expression_node_index = try ast_node_array.alloc();
 
     var label_expression: usize = undefined;
@@ -1968,11 +1700,7 @@ fn parseLabelExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
         return label_expression_node_index;
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = undefined,
-            .kind = .expected_expression,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedExpressionReport(.toPosition(lexer.current()));
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(label_expression_node_index) catch unreachable;
@@ -1980,9 +1708,9 @@ fn parseLabelExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
     }
 }
 
-fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, error_report_array: *Module.ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Match Expression at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Match Expression at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
+fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Match Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Match Expression at {any}", .{Module.Position.toPosition(lexer.current())});
     const match_expression_node_index = try ast_node_array.alloc();
 
     var peek_token = lexer.peek();
@@ -1995,15 +1723,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
         }
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "'match'",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport("'match'", .toPosition(lexer.current()));
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(match_expression_node_index) catch unreachable;
@@ -2016,16 +1736,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
             _ = lexer.next();
         } else {
             // XXX Error
-            try error_report_array.addReport(.{
-                .data = .{
-                    .unexpected_token = .{
-                        .expected = "'('",
-                        .found = .toRange(_peek_token),
-                    },
-                },
-                .kind = .unexpected_token,
-                .position = .toPosition(_peek_token),
-            });
+            try error_report_array.addUnexpectedTokenReport("'('", .toRange(_peek_token), .toPosition(_peek_token));
 
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(match_expression_node_index) catch unreachable;
@@ -2033,15 +1744,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
         }
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "'('",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport("'('", .toPosition(lexer.current()));
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(match_expression_node_index) catch unreachable;
@@ -2053,11 +1756,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
         expression = _expression;
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = undefined,
-            .kind = .expected_expression,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedExpressionReport(.toPosition(lexer.current()));
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(match_expression_node_index) catch unreachable;
@@ -2070,16 +1769,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
             _ = lexer.next();
         } else {
             // XXX Error
-            try error_report_array.addReport(.{
-                .data = .{
-                    .unexpected_token = .{
-                        .expected = "')'",
-                        .found = .toRange(_peek_token),
-                    },
-                },
-                .kind = .unexpected_token,
-                .position = .toPosition(_peek_token),
-            });
+            try error_report_array.addUnexpectedTokenReport("')'", .toRange(_peek_token), .toPosition(_peek_token));
 
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(match_expression_node_index) catch unreachable;
@@ -2087,15 +1777,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
         }
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "')'",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport("')'", .toPosition(lexer.current()));
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(match_expression_node_index) catch unreachable;
@@ -2108,16 +1790,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
             _ = lexer.next();
         } else {
             // XXX Error
-            try error_report_array.addReport(.{
-                .data = .{
-                    .unexpected_token = .{
-                        .expected = "'{'",
-                        .found = .toRange(_peek_token),
-                    },
-                },
-                .kind = .unexpected_token,
-                .position = .toPosition(_peek_token),
-            });
+            try error_report_array.addUnexpectedTokenReport("'{'", .toRange(_peek_token), .toPosition(_peek_token));
 
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(match_expression_node_index) catch unreachable;
@@ -2125,15 +1798,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
         }
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "'{'",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport("'{'", .toPosition(lexer.current()));
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(match_expression_node_index) catch unreachable;
@@ -2173,15 +1838,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
             }
         } else {
             // XXX Error
-            try error_report_array.addReport(.{
-                .data = .{
-                    .expected_token = .{
-                        .expected = "',', or '}'",
-                    },
-                },
-                .kind = .expected_token,
-                .position = .toPosition(lexer.current()),
-            });
+            try error_report_array.addExpectedTokenReport("',', or '}'", .toPosition(lexer.current()));
 
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(match_expression_node_index) catch unreachable;
@@ -2195,16 +1852,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
             _ = lexer.next();
         } else {
             // XXX Error
-            try error_report_array.addReport(.{
-                .data = .{
-                    .unexpected_token = .{
-                        .expected = "'}'",
-                        .found = .toRange(_peek_token),
-                    },
-                },
-                .kind = .unexpected_token,
-                .position = .toPosition(_peek_token),
-            });
+            try error_report_array.addUnexpectedTokenReport("'}'", .toRange(_peek_token), .toPosition(_peek_token));
 
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             if (first_match_case_node_index) |_first_match_case_node_index| {
@@ -2215,15 +1863,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
         }
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "'}'",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport("'}'", .toPosition(lexer.current()));
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         if (first_match_case_node_index) |_first_match_case_node_index| {
@@ -2247,9 +1887,9 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray
     return match_expression_node_index;
 }
 
-fn parseMatchCase(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, error_report_array: *Module.ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Match Case at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Match Case at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
+fn parseMatchCase(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Match Case at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Match Case at {any}", .{Module.Position.toPosition(lexer.current())});
     const match_case_node_index = try ast_node_array.alloc();
 
     const peek_token = lexer.peek();
@@ -2261,16 +1901,7 @@ fn parseMatchCase(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, erro
             return null;
         } else {
             // XXX Error
-            try error_report_array.addReport(.{
-                .data = .{
-                    .unexpected_token = .{
-                        .expected = "'case'",
-                        .found = .toRange(_peek_token),
-                    },
-                },
-                .kind = .unexpected_token,
-                .position = .toPosition(_peek_token),
-            });
+            try error_report_array.addUnexpectedTokenReport("'case'", .toRange(_peek_token), .toPosition(_peek_token));
 
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(match_case_node_index) catch unreachable;
@@ -2278,15 +1909,7 @@ fn parseMatchCase(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, erro
         }
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "'case'",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport("'case'", .toPosition(lexer.current()));
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(match_case_node_index) catch unreachable;
@@ -2308,15 +1931,7 @@ fn parseMatchCase(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, erro
         return match_case_node_index;
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "Label",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport("Label", .toPosition(lexer.current()));
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(match_case_node_index) catch unreachable;
@@ -2324,9 +1939,9 @@ fn parseMatchCase(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, erro
     }
 }
 
-fn parseAttributedExpression(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, error_report_array: *Module.ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Attributed Expression at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Attribute Expression at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
+fn parseAttributedExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Attributed Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Attribute Expression at {any}", .{Module.Position.toPosition(lexer.current())});
     const attributed_expression_node_index = try ast_node_array.alloc();
 
     if (lexer.peek()) |peek_token| {
@@ -2360,15 +1975,7 @@ fn parseAttributedExpression(ast_node_array: *ASTNodeArray, lexer: *Module.Token
         }
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "'in', 'out', 'inout', 'nil', 'ptr', 'ref', Identifier, '_'",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport("'in', 'out', 'inout', 'nil', 'ptr', 'ref', Identifier, '_'", .toPosition(lexer.current()));
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(attributed_expression_node_index) catch unreachable;
@@ -2379,9 +1986,9 @@ fn parseAttributedExpression(ast_node_array: *ASTNodeArray, lexer: *Module.Token
     return null;
 }
 
-fn parseBreakStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, error_report_array: *Module.ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Break Statement at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Break Statement at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
+fn parseBreakStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Break Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Break Statement at {any}", .{Module.Position.toPosition(lexer.current())});
     const break_statement_node_index = try ast_node_array.alloc();
 
     if (lexer.peek()) |peek_token| {
@@ -2393,15 +2000,7 @@ fn parseBreakStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
         }
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "'break'",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport("'break'", .toPosition(lexer.current()));
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(break_statement_node_index) catch unreachable;
@@ -2416,16 +2015,7 @@ fn parseBreakStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
                 if (lexer.peek()) |peek_token| {
                     if (peek_token.kind != .semicolon) {
                         // XXX Error
-                        try error_report_array.addReport(.{
-                            .data = .{
-                                .unexpected_token = .{
-                                    .expected = "')'",
-                                    .found = .toRange(peek_token),
-                                },
-                            },
-                            .kind = .unexpected_token,
-                            .position = .toPosition(peek_token),
-                        });
+                        try error_report_array.addUnexpectedTokenReport("')'", .toRange(peek_token), .toPosition(peek_token));
 
                         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
                         releaseASTNode(ast_node_array, expression);
@@ -2436,15 +2026,7 @@ fn parseBreakStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
                     }
                 } else {
                     // XXX Error
-                    try error_report_array.addReport(.{
-                        .data = .{
-                            .expected_token = .{
-                                .expected = "';'",
-                            },
-                        },
-                        .kind = .expected_token,
-                        .position = .toPosition(lexer.current()),
-                    });
+                    try error_report_array.addExpectedTokenReport("';'", .toPosition(lexer.current()));
 
                     lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
                     releaseASTNode(ast_node_array, expression);
@@ -2468,11 +2050,7 @@ fn parseBreakStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
                 return break_statement_node_index;
             } else {
                 // XXX Error
-                try error_report_array.addReport(.{
-                    .data = undefined,
-                    .kind = .expected_expression,
-                    .position = .toPosition(lexer.current()),
-                });
+                try error_report_array.addExpectedExpressionReport(.toPosition(lexer.current()));
 
                 lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
                 ast_node_array.free(break_statement_node_index) catch unreachable;
@@ -2480,16 +2058,7 @@ fn parseBreakStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
             }
         } else {
             // XXX Error
-            try error_report_array.addReport(.{
-                .data = .{
-                    .unexpected_token = .{
-                        .expected = "Identifier",
-                        .found = .toRange(_target_token),
-                    },
-                },
-                .kind = .unexpected_token,
-                .position = .toPosition(_target_token),
-            });
+            try error_report_array.addUnexpectedTokenReport("Identifier", .toRange(_target_token), .toPosition(_target_token));
 
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(break_statement_node_index) catch unreachable;
@@ -2497,15 +2066,7 @@ fn parseBreakStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
         }
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "'break'",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport("'break'", .toPosition(lexer.current()));
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(break_statement_node_index) catch unreachable;
@@ -2513,9 +2074,9 @@ fn parseBreakStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray,
     }
 }
 
-fn parseContinueStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArray, error_report_array: *Module.ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Continue Statement at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Continue Statement at {any}", .{Module.ErrorReport.Position.toPosition(lexer.current())});
+fn parseContinueStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Continue Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Continue Statement at {any}", .{Module.Position.toPosition(lexer.current())});
     const continue_statement_node_index = try ast_node_array.alloc();
 
     if (lexer.peek()) |peek_token| {
@@ -2527,15 +2088,7 @@ fn parseContinueStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
         }
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "'continue'",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport("'continue'", .toPosition(lexer.current()));
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(continue_statement_node_index) catch unreachable;
@@ -2550,16 +2103,7 @@ fn parseContinueStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
                 if (lexer.peek()) |peek_token| {
                     if (peek_token.kind != .semicolon) {
                         // XXX Error
-                        try error_report_array.addReport(.{
-                            .data = .{
-                                .unexpected_token = .{
-                                    .expected = "';'",
-                                    .found = .toRange(peek_token),
-                                },
-                            },
-                            .kind = .unexpected_token,
-                            .position = .toPosition(peek_token),
-                        });
+                        try error_report_array.addUnexpectedTokenReport("';'", .toRange(peek_token), .toPosition(peek_token));
 
                         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
                         releaseASTNode(ast_node_array, expression);
@@ -2570,15 +2114,7 @@ fn parseContinueStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
                     }
                 } else {
                     // XXX Error
-                    try error_report_array.addReport(.{
-                        .data = .{
-                            .expected_token = .{
-                                .expected = "';'",
-                            },
-                        },
-                        .kind = .expected_token,
-                        .position = .toPosition(lexer.current()),
-                    });
+                    try error_report_array.addExpectedTokenReport("';'", .toPosition(lexer.current()));
 
                     lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
                     releaseASTNode(ast_node_array, expression);
@@ -2602,11 +2138,7 @@ fn parseContinueStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
                 return continue_statement_node_index;
             } else {
                 // XXX Error
-                try error_report_array.addReport(.{
-                    .data = undefined,
-                    .kind = .expected_expression,
-                    .position = .toPosition(lexer.current()),
-                });
+                try error_report_array.addExpectedExpressionReport(.toPosition(lexer.current()));
 
                 lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
                 ast_node_array.free(continue_statement_node_index) catch unreachable;
@@ -2614,16 +2146,7 @@ fn parseContinueStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
             }
         } else {
             // XXX Error
-            try error_report_array.addReport(.{
-                .data = .{
-                    .unexpected_token = .{
-                        .expected = "Identifier",
-                        .found = .toRange(_target_token),
-                    },
-                },
-                .kind = .expected_token,
-                .position = .toPosition(_target_token),
-            });
+            try error_report_array.addUnexpectedTokenReport("Identifier", .toRange(_target_token), .toPosition(_target_token));
 
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(continue_statement_node_index) catch unreachable;
@@ -2631,15 +2154,7 @@ fn parseContinueStatement(ast_node_array: *ASTNodeArray, lexer: *Module.TokenArr
         }
     } else {
         // XXX Error
-        try error_report_array.addReport(.{
-            .data = .{
-                .expected_token = .{
-                    .expected = "'continue'",
-                },
-            },
-            .kind = .expected_token,
-            .position = .toPosition(lexer.current()),
-        });
+        try error_report_array.addExpectedTokenReport("'continue'", .toPosition(lexer.current()));
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(continue_statement_node_index) catch unreachable;

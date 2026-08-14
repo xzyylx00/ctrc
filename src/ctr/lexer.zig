@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 const std = @import("std");
-const Module = @import("module.zig");
+const ErrorReportArray = @import("error.zig").ErrorReportArray;
 
 pub const Token = struct {
     pub const Kind = enum {
@@ -209,7 +209,7 @@ pub fn init(string: [:0]const u8) Lexer {
     };
 }
 
-pub fn next(lexer: *Lexer, error_report_array: ?*Module.ErrorReportArray) error{OutOfCapacity}!Token {
+pub fn next(lexer: *Lexer, error_report_array: ?*ErrorReportArray) error{OutOfCapacity}!Token {
     if (lexer.buffer.len == lexer.index) {
         return Token{
             .kind = .eof,

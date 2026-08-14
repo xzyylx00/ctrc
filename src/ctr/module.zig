@@ -16,189 +16,46 @@
 
 const std = @import("std");
 const aslib = @import("aslib");
-
 const Lexer = @import("lexer.zig");
 const Parser = @import("parser.zig");
+const ErrorReportArray = @import("error.zig").ErrorReportArray;
+const TokenArray = @import("token_array.zig").TokenArray;
 const Module = @This();
 
-pub const ErrorReport = struct {
-    position: Position,
+pub const Position = struct {
+    line: usize,
+    pos: usize,
 
-    kind: ErrorReportKind,
-    data: union {
-        expected_token: ExpectedToken,
-        unexpected_token: UnexpectedToken,
-        invalid_character: InvalidCharacter,
-    },
-
-    pub const Position = struct {
-        line: usize,
-        pos: usize,
-
-        pub fn toPosition(token: ?Lexer.Token) Position {
-            if (token) |_token| {
-                return Position{
-                    .line = _token.line,
-                    .pos = _token.pos,
-                };
-            } else {
-                return Position{
-                    .line = 0,
-                    .pos = 0,
-                };
-            }
-        }
-    };
-
-    pub const Range = struct {
-        start: usize,
-        end: usize,
-
-        pub fn toRange(token: ?Lexer.Token) Range {
-            if (token) |_token| {
-                return Range{
-                    .start = _token.start,
-                    .end = _token.end,
-                };
-            } else {
-                return Range{
-                    .start = 0,
-                    .end = 0,
-                };
-            }
-        }
-    };
-
-    const InvalidCharacter = struct {
-        found: [:0]const u8,
-    };
-
-    const UnexpectedToken = struct {
-        expected: [:0]const u8,
-        found: Range,
-    };
-
-    const ExpectedToken = struct {
-        expected: [:0]const u8,
-    };
-
-    const ErrorReportKind = enum {
-        // Lexer
-        invalid_character,
-
-        // Parser
-        unexpected_token,
-        expected_token,
-        expected_expression,
-        expected_assignment_target,
-    };
-
-    pub fn report(error_report: ErrorReport, source: [:0]const u8) void {
-        switch (error_report.kind) {
-            .unexpected_token => {
-                std.log.debug("Unexpected Token at {d}:{d}, expect {s}, found {s}", .{ error_report.position.line, error_report.position.pos, error_report.data.unexpected_token.expected, source[error_report.data.unexpected_token.found.start..error_report.data.unexpected_token.found.end] });
-            },
-            .expected_token => {
-                std.log.debug("Expected Token at {d}:{d}, expect {s}", .{ error_report.position.line, error_report.position.pos, error_report.data.expected_token.expected });
-            },
-            .expected_expression => {
-                std.log.debug("Expected Expression at {d}:{d}", .{ error_report.position.line, error_report.position.pos });
-            },
-            .expected_assignment_target => {
-                std.log.debug("Expected Assignment Target at {d}:{d}", .{ error_report.position.line, error_report.position.pos });
-            },
-            .invalid_character => {
-                std.log.debug("Invalid Character at {d}:{d}", .{ error_report.position.line, error_report.position.pos });
-            },
+    pub fn toPosition(token: ?Lexer.Token) Position {
+        if (token) |_token| {
+            return Position{
+                .line = _token.line,
+                .pos = _token.pos,
+            };
+        } else {
+            return Position{
+                .line = 0,
+                .pos = 0,
+            };
         }
     }
 };
 
-pub const ErrorReportArray = struct {
-    error_reports: []ErrorReport,
-    used: usize,
+pub const Range = struct {
+    start: usize,
+    end: usize,
 
-    pub fn init(allocator: std.mem.Allocator, size: usize) error{OutOfMemory}!ErrorReportArray {
-        const error_reports = try allocator.alloc(ErrorReport, size);
-        return ErrorReportArray{
-            .error_reports = error_reports,
-            .used = 0,
-        };
-    }
-
-    pub fn deinit(error_report_array: *ErrorReportArray, allocator: std.mem.Allocator) void {
-        allocator.free(error_report_array.error_reports);
-
-        error_report_array.* = ErrorReportArray{
-            .error_reports = undefined,
-            .used = 0,
-        };
-    }
-
-    pub fn clear(error_report_array: *ErrorReportArray) void {
-        error_report_array.used = 0;
-    }
-
-    pub fn raw(error_report_array: *const ErrorReportArray) []ErrorReport {
-        return error_report_array.error_reports[0..error_report_array.used];
-    }
-
-    pub fn addReport(error_report_array: *ErrorReportArray, error_report: ErrorReport) error{OutOfCapacity}!void {
-        if (error_report_array.used == error_report_array.error_reports.len) {
-            return error.OutOfCapacity;
-        }
-
-        error_report_array.error_reports[error_report_array.used] = error_report;
-        error_report_array.used += 1;
-    }
-};
-
-pub const TokenArray = struct {
-    tokens: []Lexer.Token,
-    _current: ?usize,
-
-    pub fn peek(token_array: *const TokenArray) ?Lexer.Token {
-        var local_token_array = token_array.*;
-        const token = local_token_array.next();
-        if (token.kind == .eof) {
-            return null;
-        }
-        return token;
-    }
-
-    pub fn next(token_array: *TokenArray) Lexer.Token {
-        if (token_array._current == null) {
-            token_array._current = 0;
+    pub fn toRange(token: ?Lexer.Token) Range {
+        if (token) |_token| {
+            return Range{
+                .start = _token.start,
+                .end = _token.end,
+            };
         } else {
-            token_array._current = token_array._current.? + 1;
-        }
-
-        if (token_array.tokens[token_array._current.?].kind == .eof) {
-            token_array._current = token_array._current.? - 1;
-            return token_array.tokens[token_array._current.? + 1];
-        } else if (token_array.tokens[token_array._current.?].kind == .invalid) {
-            return token_array.tokens[token_array._current.?];
-        } else {
-            return token_array.tokens[token_array._current.?];
-        }
-    }
-
-    pub fn skipUntil(lexer: *TokenArray, comptime until: []const Lexer.Token.Kind) void {
-        while (true) {
-            const token = lexer.next();
-            inline for (until) |until_kind| {
-                if (token.kind == until_kind or token.kind == .eof) {
-                    return;
-                }
-            }
-        }
-    }
-
-    pub fn current(lexer: *const TokenArray) ?Lexer.Token {
-        if (lexer._current) |__current| {
-            return lexer.tokens[__current];
-        } else {
-            return null;
+            return Range{
+                .start = 0,
+                .end = 0,
+            };
         }
     }
 };
@@ -321,8 +178,6 @@ pub fn parse(module: *Module) error{OutOfCapacity}!void {
 
 pub fn report(module: *Module) void {
     if (module.source) |source| {
-        for (module.error_report_array.raw()) |error_report| {
-            ErrorReport.report(error_report, source);
-        }
+        module.error_report_array.report(source);
     }
 }
