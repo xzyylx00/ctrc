@@ -1,15 +1,22 @@
-#! This is a test file.
 in std = #import("std");
+in module = #import("module.ctr");
 
-in fract = function (in a: uint64) {
-        match (a) {
-                case 0 : 1,
-                case _ : multiply(a, fract ( sub( a, 1 ) ) )
-        }
+in myAlloc = module.myAlloc;
+_ = myAlloc;
+#! in private_var = module.private_assignment;
+#! Invisible
+
+in fib = function(in num: uint64);
+
+in main = function()c: match(1) {
+    case _: {
+        std.debug.print(fib(_));
+        continue c add(_, 1);
+        nil, nil, nil
+    };
+    case 9: {
+        break c nil;
+        nil, nil
+    }
 };
-
-in main = function () {
-        fract(9)
-};
-
 main

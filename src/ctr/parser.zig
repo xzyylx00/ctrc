@@ -33,7 +33,6 @@ pub const ASTNode = struct {
         expression,
         call_expression,
         call_statement,
-        call_parameter,
         type_expression,
         type_entry,
         function_expression,
@@ -44,6 +43,7 @@ pub const ASTNode = struct {
         continue_statement,
         literal_expression,
         assignment_target,
+        multiple_expression,
     };
 
     const Root = struct {
@@ -78,11 +78,6 @@ pub const ASTNode = struct {
     const CallExpression = struct {
         target: usize,
         parameter: ?usize,
-    };
-
-    const CallParameter = struct {
-        expression: usize,
-        next: ?usize,
     };
 
     const BlockExpression = struct {
@@ -202,6 +197,11 @@ pub const ASTNode = struct {
         next: ?usize,
     };
 
+    const MultipleExpression = struct {
+        expression: usize,
+        next: ?usize,
+    };
+
     kind: Kind,
     data: union {
         root: Root,
@@ -214,7 +214,6 @@ pub const ASTNode = struct {
         continue_statement: ContinueStatement,
         call_statement: CallStatement,
         call_expression: CallExpression,
-        call_parameter: CallParameter,
         expression: Expression,
         type_expression: TypeExpression,
         type_entry: TypeEntry,
@@ -224,6 +223,7 @@ pub const ASTNode = struct {
         match_expression: MatchExpression,
         match_case: MatchCase,
         attributed_expression: AttributedExpression,
+        multiple_expression: MultipleExpression,
     },
 };
 
@@ -547,7 +547,7 @@ fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, e
     }
 
     var expression_node_index: ?usize = null;
-    if (try parseExpression(ast_node_array, lexer, error_report_array)) |_expression_node_index| {
+    if (try parseSingleExpression(ast_node_array, lexer, error_report_array)) |_expression_node_index| {
         expression_node_index = _expression_node_index;
     } else {
         // XXX Error
@@ -755,8 +755,6 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_
     const call_expression_node_index = try ast_node_array.alloc();
 
     if (try parseLiteralExpression(ast_node_array, lexer, error_report_array)) |target_node_index| {
-        var first_call_parameter_node_index: ?usize = null;
-        var current_call_parameter_node_index: ?usize = null;
         var peek_token: ?Token = null;
 
         peek_token = lexer.peek();
@@ -772,52 +770,8 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_
             return null;
         }
 
-        while (try parseCallParameter(ast_node_array, lexer, error_report_array)) |call_parameter_node_index| {
-            if (first_call_parameter_node_index == null) {
-                first_call_parameter_node_index = call_parameter_node_index;
-            }
+        const call_parameter_node_index = try parseExpression(ast_node_array, lexer, error_report_array);
 
-            if (current_call_parameter_node_index) |_current_call_parameter_node_index| {
-                const current_call_parameter_node = ast_node_array.get(_current_call_parameter_node_index) catch unreachable;
-                const linked_call_parameter_node = ASTNode{
-                    .data = .{
-                        .call_parameter = .{
-                            .expression = current_call_parameter_node.data.call_parameter.expression,
-                            .next = call_parameter_node_index,
-                        },
-                    },
-                    .kind = .call_parameter,
-                };
-
-                ast_node_array.set(_current_call_parameter_node_index, linked_call_parameter_node) catch unreachable;
-            }
-            current_call_parameter_node_index = call_parameter_node_index;
-
-            peek_token = lexer.peek();
-            if (peek_token) |_peek_token| {
-                if (_peek_token.kind != .comma) {
-                    break;
-                } else {
-                    _ = lexer.next();
-                }
-            } else {
-                // XXX Error
-
-                try error_report_array.addExpectedTokenReport(
-                    "',', or ')'",
-                    .toPosition(lexer.current()),
-                );
-
-                // Skip
-                lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-
-                if (first_call_parameter_node_index) |_first_call_parameter_node_index| {
-                    releaseASTNode(ast_node_array, _first_call_parameter_node_index);
-                }
-                ast_node_array.free(call_expression_node_index) catch unreachable;
-                return null;
-            }
-        }
         peek_token = lexer.peek();
         if (peek_token) |_peek_token| {
             if (_peek_token.kind != .r_paren) {
@@ -832,8 +786,8 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_
                 // Skip
                 lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
-                if (first_call_parameter_node_index) |_first_call_parameter_node_index| {
-                    releaseASTNode(ast_node_array, _first_call_parameter_node_index);
+                if (call_parameter_node_index) |_call_parameter_node_index| {
+                    releaseASTNode(ast_node_array, _call_parameter_node_index);
                 }
                 ast_node_array.free(call_expression_node_index) catch unreachable;
 
@@ -851,8 +805,8 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_
             // Skip
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
-            if (first_call_parameter_node_index) |_first_call_parameter_node_index| {
-                releaseASTNode(ast_node_array, _first_call_parameter_node_index);
+            if (call_parameter_node_index) |_call_parameter_node_index| {
+                releaseASTNode(ast_node_array, _call_parameter_node_index);
             }
             ast_node_array.free(call_expression_node_index) catch unreachable;
             return null;
@@ -861,7 +815,7 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_
         const call_expression_node = ASTNode{
             .data = .{
                 .call_expression = .{
-                    .parameter = first_call_parameter_node_index,
+                    .parameter = call_parameter_node_index,
                     .target = target_node_index,
                 },
             },
@@ -876,172 +830,239 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_
     }
 }
 
-fn parseCallParameter(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Call Parameter at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Call Parameter at {any}", .{Module.Position.toPosition(lexer.current())});
-    const call_parameter_node_index = try ast_node_array.alloc();
-
-    if (try parseExpression(ast_node_array, lexer, error_report_array)) |expression_node_index| {
-        const call_parameter_node = ASTNode{
-            .data = .{
-                .call_parameter = .{
-                    .expression = expression_node_index,
-                    .next = null,
-                },
-            },
-            .kind = .call_parameter,
-        };
-        ast_node_array.set(call_parameter_node_index, call_parameter_node) catch unreachable;
-        return call_parameter_node_index;
-    }
-
-    return null;
-}
-
 fn parseExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
     std.log.debug("Parsing Expression at {any}", .{Module.Position.toPosition(lexer.current())});
     defer std.log.debug("Leaving Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (try parseMultipleExpression(ast_node_array, lexer, error_report_array)) |multiple_expression_node_index| {
+        const multiple_expression_node = ast_node_array.get(multiple_expression_node_index) catch unreachable;
+
+        if (multiple_expression_node.data.multiple_expression.next == null) {
+            const single_expression_node_index = multiple_expression_node.data.multiple_expression.expression;
+            ast_node_array.free(multiple_expression_node_index) catch unreachable;
+            return single_expression_node_index;
+        }
+
+        return multiple_expression_node_index;
+    } else {
+        return null;
+    }
+}
+
+fn parseSingleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Single Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Single Expression at {any}", .{Module.Position.toPosition(lexer.current())});
     const expression_node_index = try ast_node_array.alloc();
     const previous_lexer = lexer.*;
 
-    if (try parseLabelExpression(ast_node_array, lexer, error_report_array)) |label_expression_index| {
-        const expression_node = ASTNode{
-            .kind = .expression,
-            .data = .{
-                .expression = .{
-                    .expression = label_expression_index,
-                    .kind = .label,
+    const peek_token = lexer.peek();
+    if (peek_token) |_peek_token| {
+        if (_peek_token.kind == .identifier) {
+            if (try parseLabelExpression(ast_node_array, lexer, error_report_array)) |label_expression_index| {
+                const expression_node = ASTNode{
+                    .kind = .expression,
+                    .data = .{
+                        .expression = .{
+                            .expression = label_expression_index,
+                            .kind = .label,
+                        },
+                    },
+                };
+
+                ast_node_array.set(expression_node_index, expression_node) catch unreachable;
+                return expression_node_index;
+            } else {
+                lexer.* = previous_lexer;
+            }
+        }
+        if (try parseCallExpression(ast_node_array, lexer, error_report_array)) |call_expression_index| {
+            const expression_node = ASTNode{
+                .kind = .expression,
+                .data = .{
+                    .expression = .{
+                        .expression = call_expression_index,
+                        .kind = .call,
+                    },
                 },
-            },
-        };
+            };
 
-        ast_node_array.set(expression_node_index, expression_node) catch unreachable;
-        return expression_node_index;
-    } else {
-        lexer.* = previous_lexer;
-    }
+            ast_node_array.set(expression_node_index, expression_node) catch unreachable;
+            return expression_node_index;
+        } else {
+            lexer.* = previous_lexer;
+        }
 
-    if (try parseMatchExpression(ast_node_array, lexer, error_report_array)) |match_expression_index| {
-        const expression_node = ASTNode{
-            .kind = .expression,
-            .data = .{
-                .expression = .{
-                    .expression = match_expression_index,
-                    .kind = .match,
+        if (try parseLiteralExpression(ast_node_array, lexer, error_report_array)) |literal_expression_index| {
+            const expression_node = ASTNode{
+                .kind = .expression,
+                .data = .{
+                    .expression = .{
+                        .expression = literal_expression_index,
+                        .kind = .literal,
+                    },
                 },
-            },
-        };
+            };
 
-        ast_node_array.set(expression_node_index, expression_node) catch unreachable;
-        return expression_node_index;
+            ast_node_array.set(expression_node_index, expression_node) catch unreachable;
+            return expression_node_index;
+        } else {
+            lexer.* = previous_lexer;
+        }
+
+        if (_peek_token.kind == .keyword_match) {
+            if (try parseMatchExpression(ast_node_array, lexer, error_report_array)) |match_expression_index| {
+                const expression_node = ASTNode{
+                    .kind = .expression,
+                    .data = .{
+                        .expression = .{
+                            .expression = match_expression_index,
+                            .kind = .match,
+                        },
+                    },
+                };
+
+                ast_node_array.set(expression_node_index, expression_node) catch unreachable;
+                return expression_node_index;
+            } else {
+                lexer.* = previous_lexer;
+            }
+        }
+
+        if (_peek_token.kind == .keyword_in or _peek_token.kind == .keyword_inout or _peek_token.kind == .keyword_out or _peek_token.kind == .keyword_ptr or _peek_token.kind == .keyword_ref) {
+            if (try parseAttributedExpression(ast_node_array, lexer, error_report_array)) |attributed_expression_index| {
+                const expression_node = ASTNode{
+                    .kind = .expression,
+                    .data = .{
+                        .expression = .{
+                            .expression = attributed_expression_index,
+                            .kind = .attributed,
+                        },
+                    },
+                };
+
+                ast_node_array.set(expression_node_index, expression_node) catch unreachable;
+                return expression_node_index;
+            } else {
+                lexer.* = previous_lexer;
+            }
+        }
+
+        if (_peek_token.kind == .keyword_type) {
+            if (try parseTypeExpression(ast_node_array, lexer, error_report_array)) |type_expression_index| {
+                const expression_node = ASTNode{
+                    .kind = .expression,
+                    .data = .{
+                        .expression = .{
+                            .expression = type_expression_index,
+                            .kind = .type,
+                        },
+                    },
+                };
+
+                ast_node_array.set(expression_node_index, expression_node) catch unreachable;
+                return expression_node_index;
+            } else {
+                lexer.* = previous_lexer;
+            }
+        }
+        if (_peek_token.kind == .keyword_function) {
+            if (try parseFunctionExpression(ast_node_array, lexer, error_report_array)) |function_expression_index| {
+                const expression_node = ASTNode{
+                    .kind = .expression,
+                    .data = .{
+                        .expression = .{
+                            .expression = function_expression_index,
+                            .kind = .function,
+                        },
+                    },
+                };
+
+                ast_node_array.set(expression_node_index, expression_node) catch unreachable;
+                return expression_node_index;
+            } else {
+                lexer.* = previous_lexer;
+            }
+        }
+        if (_peek_token.kind == .l_brace) {
+            if (try parseBlockExpression(ast_node_array, lexer, error_report_array)) |block_expression_index| {
+                const expression_node = ASTNode{
+                    .kind = .expression,
+                    .data = .{
+                        .expression = .{
+                            .expression = block_expression_index,
+                            .kind = .block,
+                        },
+                    },
+                };
+
+                ast_node_array.set(expression_node_index, expression_node) catch unreachable;
+                return expression_node_index;
+            } else {
+                lexer.* = previous_lexer;
+            }
+        }
     } else {
-        lexer.* = previous_lexer;
-    }
-
-    if (try parseCallExpression(ast_node_array, lexer, error_report_array)) |call_expression_index| {
-        const expression_node = ASTNode{
-            .kind = .expression,
-            .data = .{
-                .expression = .{
-                    .expression = call_expression_index,
-                    .kind = .call,
-                },
-            },
-        };
-
-        ast_node_array.set(expression_node_index, expression_node) catch unreachable;
-        return expression_node_index;
-    } else {
-        lexer.* = previous_lexer;
-    }
-
-    if (try parseAttributedExpression(ast_node_array, lexer, error_report_array)) |attributed_expression_index| {
-        const expression_node = ASTNode{
-            .kind = .expression,
-            .data = .{
-                .expression = .{
-                    .expression = attributed_expression_index,
-                    .kind = .attributed,
-                },
-            },
-        };
-
-        ast_node_array.set(expression_node_index, expression_node) catch unreachable;
-        return expression_node_index;
-    } else {
-        lexer.* = previous_lexer;
-    }
-
-    if (try parseLiteralExpression(ast_node_array, lexer, error_report_array)) |literal_expression_index| {
-        const expression_node = ASTNode{
-            .kind = .expression,
-            .data = .{
-                .expression = .{
-                    .expression = literal_expression_index,
-                    .kind = .literal,
-                },
-            },
-        };
-
-        ast_node_array.set(expression_node_index, expression_node) catch unreachable;
-        return expression_node_index;
-    } else {
-        lexer.* = previous_lexer;
-    }
-
-    if (try parseTypeExpression(ast_node_array, lexer, error_report_array)) |type_expression_index| {
-        const expression_node = ASTNode{
-            .kind = .expression,
-            .data = .{
-                .expression = .{
-                    .expression = type_expression_index,
-                    .kind = .type,
-                },
-            },
-        };
-
-        ast_node_array.set(expression_node_index, expression_node) catch unreachable;
-        return expression_node_index;
-    } else {
-        lexer.* = previous_lexer;
-    }
-
-    if (try parseFunctionExpression(ast_node_array, lexer, error_report_array)) |function_expression_index| {
-        const expression_node = ASTNode{
-            .kind = .expression,
-            .data = .{
-                .expression = .{
-                    .expression = function_expression_index,
-                    .kind = .function,
-                },
-            },
-        };
-
-        ast_node_array.set(expression_node_index, expression_node) catch unreachable;
-        return expression_node_index;
-    } else {
-        lexer.* = previous_lexer;
-    }
-
-    if (try parseBlockExpression(ast_node_array, lexer, error_report_array)) |block_expression_index| {
-        const expression_node = ASTNode{
-            .kind = .expression,
-            .data = .{
-                .expression = .{
-                    .expression = block_expression_index,
-                    .kind = .block,
-                },
-            },
-        };
-
-        ast_node_array.set(expression_node_index, expression_node) catch unreachable;
-        return expression_node_index;
-    } else {
-        lexer.* = previous_lexer;
+        // XXX Error
     }
 
     ast_node_array.free(expression_node_index) catch unreachable;
     return null;
+}
+
+fn parseMultipleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Multiple Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Multiple Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    // XXX Need error report
+    var first_expression_node_index: ?usize = null;
+    var current_expression_node_index: ?usize = null;
+    while (true) {
+        if (try parseSingleExpression(ast_node_array, lexer, error_report_array)) |expression_node_index| {
+            const multiple_expression_node_index = try ast_node_array.alloc();
+            if (first_expression_node_index == null) {
+                first_expression_node_index = multiple_expression_node_index;
+            }
+
+            if (current_expression_node_index) |_current_expression_node_index| {
+                const current_expression_node = ast_node_array.get(_current_expression_node_index) catch unreachable;
+                const linked_expression_node = ASTNode{
+                    .kind = .multiple_expression,
+                    .data = .{
+                        .multiple_expression = .{
+                            .expression = current_expression_node.data.multiple_expression.expression,
+                            .next = multiple_expression_node_index,
+                        },
+                    },
+                };
+
+                ast_node_array.set(_current_expression_node_index, linked_expression_node) catch unreachable;
+            }
+
+            current_expression_node_index = multiple_expression_node_index;
+
+            const multiple_expression_node = ASTNode{
+                .kind = .multiple_expression,
+                .data = .{
+                    .multiple_expression = .{
+                        .expression = expression_node_index,
+                        .next = null,
+                    },
+                },
+            };
+            ast_node_array.set(multiple_expression_node_index, multiple_expression_node) catch unreachable;
+        }
+
+        if (lexer.peek()) |peek_token| {
+            if (peek_token.kind != .comma) {
+                break;
+            } else {
+                _ = lexer.next();
+            }
+        } else {
+            // Should this be error?
+            break;
+        }
+    }
+
+    return first_expression_node_index;
 }
 
 fn parseLiteralExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
@@ -1481,7 +1502,7 @@ fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *TokenArray, err
         return null;
     }
 
-    if (try parseExpression(ast_node_array, lexer, error_report_array)) |expression_node_index| {
+    if (try parseSingleExpression(ast_node_array, lexer, error_report_array)) |expression_node_index| {
         const function_parameter_node = ASTNode{
             .data = .{
                 .function_parameter = .{
@@ -1831,14 +1852,14 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error
 
         peek_token = lexer.peek();
         if (peek_token) |_peek_token| {
-            if (_peek_token.kind != .comma) {
+            if (_peek_token.kind != .semicolon) {
                 break;
             } else {
                 _ = lexer.next();
             }
         } else {
             // XXX Error
-            try error_report_array.addExpectedTokenReport("',', or '}'", .toPosition(lexer.current()));
+            try error_report_array.addExpectedTokenReport(";', or '}'", .toPosition(lexer.current()));
 
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
             ast_node_array.free(match_expression_node_index) catch unreachable;
@@ -2217,16 +2238,9 @@ pub fn dump(ast_node_array: *ASTNodeArray, source: [:0]const u8, root_node_index
             printSpace(space + indent);
             std.debug.print("Target:\n", .{});
             try dump(ast_node_array, source, root_node.data.call_expression.target, space + indent * 2);
-            var current_parameter = root_node.data.call_expression.parameter;
-            while (current_parameter) |_current_parameter| {
-                const current_parameter_node = try ast_node_array.get(_current_parameter);
-                try dump(ast_node_array, source, _current_parameter, space + indent);
-                current_parameter = current_parameter_node.data.call_parameter.next;
+            if (root_node.data.call_expression.parameter) |parameter| {
+                try dump(ast_node_array, source, parameter, space + indent * 2);
             }
-        },
-        .call_parameter => {
-            std.debug.print("Call Parameter:\n", .{});
-            try dump(ast_node_array, source, root_node.data.call_parameter.expression, space + indent);
         },
         .call_statement => {
             std.debug.print("Call Statement:\n", .{});
@@ -2385,6 +2399,16 @@ pub fn dump(ast_node_array: *ASTNodeArray, source: [:0]const u8, root_node_index
             });
 
             try dump(ast_node_array, source, root_node.data.attributed_expression.expression, space + indent);
+        },
+        .multiple_expression => {
+            std.debug.print("Multiple Expression:\n", .{});
+
+            var current_expression_node_index: ?usize = root_node_index;
+            while (current_expression_node_index) |_current_expression_node_index| {
+                const current_expression_node = try ast_node_array.get(_current_expression_node_index);
+                try dump(ast_node_array, source, current_expression_node.data.multiple_expression.expression, space + indent);
+                current_expression_node_index = current_expression_node.data.multiple_expression.next;
+            }
         },
     }
 }
