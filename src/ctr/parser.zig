@@ -1403,7 +1403,7 @@ fn parseTypeEntry(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_repor
     }
 
     var expression_node_index: ?usize = undefined;
-    if (try parseExpression(ast_node_array, lexer, error_report_array)) |_expression_node_index| {
+    if (try parseSingleExpression(ast_node_array, lexer, error_report_array)) |_expression_node_index| {
         expression_node_index = _expression_node_index;
     }
     const type_entry_node = ASTNode{

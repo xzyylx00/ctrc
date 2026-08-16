@@ -1,0 +1,8 @@
+in std = #import("std");
+
+in build = function(in h: std.build.Helper) {
+    in process = h.nativeBuildProcess();
+    nil
+};
+
+std.build.main(build)
