@@ -6,11 +6,16 @@ _ = myAlloc;
 #! in private_var = module.private_assignment;
 #! Invisible
 
-in fib = function(in num: uint64);
+in typee = type("Entry") {
+    aaA,
+    AAAA
+};
+
+in fib = function(in num: uint64, ) external("c");
 
 in main = function()c: match(1) {
     case _: {
-        std.debug.print(fib(_));
+        std.debug.print(fib(_,));
         continue c add(_, 1);
         nil, nil, nil
     };

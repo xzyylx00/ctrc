@@ -14,10 +14,10 @@
 // You should have received a copy of the Lesser GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-const Module = @import("module.zig");
-const Parser = @import("parser.zig");
-const std = @import("std");
+pub const Lexer = @import("lexer.zig");
+pub const Module = @import("module.zig");
+pub const ErrorReport = @import("error.zig").ErrorReport;
+pub const ErrorReportArray = @import("error.zig").ErrorReportArray;
 
-pub fn format(ast_node_array: Parser.ASTNodeArray, root_node_index: usize, comment: []Module.Comment, writer: std.Io.Writer) error{OutOfRange, WriteFailed}!void{
-    
-}
+pub const ast = @import("ast.zig");
+pub const parser = @import("parser.zig");

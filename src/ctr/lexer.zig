@@ -31,6 +31,8 @@ pub const Token = struct {
         keyword_break,
         keyword_continue,
         keyword_nil,
+        keyword_external,
+        keyword_internal,
 
         colon,
         comma,

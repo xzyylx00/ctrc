@@ -20,6 +20,7 @@ const Lexer = @import("lexer.zig");
 const Parser = @import("parser.zig");
 const ErrorReportArray = @import("error.zig").ErrorReportArray;
 const TokenArray = @import("token_array.zig").TokenArray;
+const ASTNodeArray = @import("ast.zig").ASTNodeArray;
 const Module = @This();
 
 pub const Position = struct {
@@ -70,7 +71,7 @@ source: ?[:0]const u8,
 token_array: ?TokenArray,
 comment: ?[]Comment,
 error_report_array: ErrorReportArray,
-ast_node_array: Parser.ASTNodeArray,
+ast_node_array: ASTNodeArray,
 ast_node_root: ?usize,
 allocator: std.mem.Allocator,
 
@@ -78,7 +79,7 @@ pub fn init(allocator: std.mem.Allocator, error_report_array_size: u32, ast_node
     var error_report_array = try ErrorReportArray.init(allocator, error_report_array_size);
     errdefer error_report_array.deinit(allocator);
 
-    var ast_node_array = try Parser.ASTNodeArray.init(allocator, ast_node_array_size);
+    var ast_node_array = try ASTNodeArray.init(allocator, ast_node_array_size);
     errdefer ast_node_array.deinit(allocator);
 
     return Module{

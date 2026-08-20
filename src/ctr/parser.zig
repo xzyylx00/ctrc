@@ -21,213 +21,8 @@ const Module = @import("module.zig");
 const ErrorReportArray = @import("error.zig").ErrorReportArray;
 const TokenArray = @import("token_array.zig").TokenArray;
 const Token = Lexer.Token;
-
-pub const ASTNode = struct {
-    pub const Kind = enum {
-        root,
-        label_expression,
-        block_expression,
-        attributed_expression,
-        statement,
-        assignment_statement,
-        expression,
-        call_expression,
-        call_statement,
-        type_expression,
-        type_entry,
-        function_expression,
-        function_parameter,
-        match_expression,
-        match_case,
-        break_statement,
-        continue_statement,
-        literal_expression,
-        assignment_target,
-        multiple_expression,
-    };
-
-    const Root = struct {
-        containor: usize,
-    };
-
-    const AssignmentTarget = struct {
-        const Name = struct {
-            start: usize,
-            end: usize,
-        };
-        const AccessAttribute = enum {
-            in,
-            out,
-            inout,
-            none,
-        };
-        access_attribute: AccessAttribute,
-        name: Name,
-        next: ?usize,
-    };
-
-    const AssignmentStatement = struct {
-        target: usize,
-        expression: usize,
-    };
-
-    const CallStatement = struct {
-        call_expression: usize,
-    };
-
-    const CallExpression = struct {
-        target: usize,
-        parameter: ?usize,
-    };
-
-    const BlockExpression = struct {
-        statement: ?usize,
-        expression: usize,
-    };
-
-    const LiteralExpression = struct {
-        const LiteralKind = enum {
-            string,
-            char,
-            integer,
-            float,
-            nil,
-            macro,
-            underline,
-            identifier,
-        };
-
-        kind: LiteralKind,
-        position: Module.Range,
-    };
-
-    const TypeExpression = struct {
-        kind: usize,
-        entry: ?usize,
-    };
-
-    const TypeEntry = struct {
-        name: Module.Range,
-        expression: ?usize,
-        next: ?usize,
-    };
-
-    const AttributedExpression = struct {
-        const AttributeKind = enum {
-            in,
-            out,
-            inout,
-            ref,
-            ptr,
-        };
-
-        kind: AttributeKind,
-        expression: usize,
-    };
-
-    const Statement = struct {
-        const StatementKind = enum {
-            assignment,
-            call,
-            @"break",
-            @"continue",
-        };
-
-        kind: StatementKind,
-        statement: usize,
-        next: ?usize,
-    };
-
-    const Expression = struct {
-        const ExpressionKind = enum {
-            call,
-            function,
-            type,
-            block,
-            match,
-            literal,
-            label,
-            attributed,
-        };
-
-        kind: ExpressionKind,
-        expression: usize,
-    };
-
-    const FunctionExpression = struct {
-        parameter: ?usize,
-        expression: ?usize,
-    };
-
-    const FunctionParameter = struct {
-        const AccessAttribute = enum {
-            in,
-            out,
-            inout,
-        };
-
-        access_attribute: AccessAttribute,
-        name: Module.Range,
-        expression: usize,
-        next: ?usize,
-    };
-
-    const LabelExpression = struct {
-        label: usize,
-        expression: usize,
-    };
-
-    const BreakStatement = struct {
-        name: Module.Range,
-        expression: usize,
-    };
-
-    const ContinueStatement = struct {
-        name: Module.Range,
-        expression: usize,
-    };
-
-    const MatchExpression = struct {
-        expression: usize,
-        case: ?usize,
-    };
-
-    const MatchCase = struct {
-        expression: usize, // Use label expression
-        next: ?usize,
-    };
-
-    const MultipleExpression = struct {
-        expression: usize,
-        next: ?usize,
-    };
-
-    kind: Kind,
-    data: union {
-        root: Root,
-        label_expression: LabelExpression,
-        block_expression: BlockExpression,
-        statement: Statement,
-        assignment_statement: AssignmentStatement,
-        assignment_target: AssignmentTarget,
-        break_statement: BreakStatement,
-        continue_statement: ContinueStatement,
-        call_statement: CallStatement,
-        call_expression: CallExpression,
-        expression: Expression,
-        type_expression: TypeExpression,
-        type_entry: TypeEntry,
-        literal_expression: LiteralExpression,
-        function_expression: FunctionExpression,
-        function_parameter: FunctionParameter,
-        match_expression: MatchExpression,
-        match_case: MatchCase,
-        attributed_expression: AttributedExpression,
-        multiple_expression: MultipleExpression,
-    },
-};
-
-pub const ASTNodeArray = aslib.array.StableIndexArrayUnmanaged(ASTNode);
+const ASTNode = @import("ast.zig").ASTNode;
+const ASTNodeArray = @import("ast.zig").ASTNodeArray;
 
 fn releaseASTNode(ast_node_array: *ASTNodeArray, node_index: usize) void {
     const ast_node = ast_node_array.get(node_index) catch unreachable;
@@ -756,6 +551,8 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_
 
     if (try parseLiteralExpression(ast_node_array, lexer, error_report_array)) |target_node_index| {
         var peek_token: ?Token = null;
+        var first_call_parameter_node_index: ?usize = null;
+        var current_call_parameter_node_index: ?usize = null;
 
         peek_token = lexer.peek();
         if (peek_token) |_peek_token| {
@@ -770,7 +567,74 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_
             return null;
         }
 
-        const call_parameter_node_index = try parseExpression(ast_node_array, lexer, error_report_array);
+        while (try parseCallParameter(ast_node_array, lexer, error_report_array)) |call_parameter_node_index| {
+            if (first_call_parameter_node_index == null) {
+                first_call_parameter_node_index = call_parameter_node_index;
+            }
+
+            if (current_call_parameter_node_index) |_current_call_parameter_node_index| {
+                const current_call_parameter_node = ast_node_array.get(_current_call_parameter_node_index) catch unreachable;
+                const linked_call_parameter_node = ASTNode{
+                    .data = .{
+                        .call_parameter = .{
+                            .expression = current_call_parameter_node.data.call_parameter.expression,
+                            .next = call_parameter_node_index,
+                        },
+                    },
+                    .kind = .call_parameter,
+                };
+
+                ast_node_array.set(_current_call_parameter_node_index, linked_call_parameter_node) catch unreachable;
+            }
+            current_call_parameter_node_index = call_parameter_node_index;
+
+            peek_token = lexer.peek();
+            if (peek_token) |_peek_token| {
+                if (_peek_token.kind == .comma) {
+                    _ = lexer.next();
+                    peek_token = lexer.peek();
+                    if (peek_token) |__peek_token| {
+                        if (__peek_token.kind == .r_paren) {
+                            break;
+                        }
+                    } else {
+                        // XXX Error
+
+                        try error_report_array.addExpectedTokenReport(
+                            "Expression or ')'",
+                            .toPosition(lexer.current()),
+                        );
+
+                        // Skip
+                        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
+
+                        if (first_call_parameter_node_index) |_first_call_parameter_node_index| {
+                            releaseASTNode(ast_node_array, _first_call_parameter_node_index);
+                        }
+                        ast_node_array.free(call_expression_node_index) catch unreachable;
+                        return null;
+                    }
+                } else {
+                    break;
+                }
+            } else {
+                // XXX Error
+
+                try error_report_array.addExpectedTokenReport(
+                    "',', or ')'",
+                    .toPosition(lexer.current()),
+                );
+
+                // Skip
+                lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
+
+                if (first_call_parameter_node_index) |_first_call_parameter_node_index| {
+                    releaseASTNode(ast_node_array, _first_call_parameter_node_index);
+                }
+                ast_node_array.free(call_expression_node_index) catch unreachable;
+                return null;
+            }
+        }
 
         peek_token = lexer.peek();
         if (peek_token) |_peek_token| {
@@ -786,8 +650,8 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_
                 // Skip
                 lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
-                if (call_parameter_node_index) |_call_parameter_node_index| {
-                    releaseASTNode(ast_node_array, _call_parameter_node_index);
+                if (first_call_parameter_node_index) |call_parameter_node_index| {
+                    releaseASTNode(ast_node_array, call_parameter_node_index);
                 }
                 ast_node_array.free(call_expression_node_index) catch unreachable;
 
@@ -805,8 +669,8 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_
             // Skip
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
-            if (call_parameter_node_index) |_call_parameter_node_index| {
-                releaseASTNode(ast_node_array, _call_parameter_node_index);
+            if (first_call_parameter_node_index) |call_parameter_node_index| {
+                releaseASTNode(ast_node_array, call_parameter_node_index);
             }
             ast_node_array.free(call_expression_node_index) catch unreachable;
             return null;
@@ -815,7 +679,7 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_
         const call_expression_node = ASTNode{
             .data = .{
                 .call_expression = .{
-                    .parameter = call_parameter_node_index,
+                    .parameter = first_call_parameter_node_index,
                     .target = target_node_index,
                 },
             },
@@ -828,6 +692,28 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_
         ast_node_array.free(call_expression_node_index) catch unreachable;
         return null;
     }
+}
+
+fn parseCallParameter(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Call Parameter at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Call Parameter at {any}", .{Module.Position.toPosition(lexer.current())});
+    const call_parameter_node_index = try ast_node_array.alloc();
+
+    if (try parseSingleExpression(ast_node_array, lexer, error_report_array)) |expression_node_index| {
+        const call_parameter_node = ASTNode{
+            .data = .{
+                .call_parameter = .{
+                    .expression = expression_node_index,
+                    .next = null,
+                },
+            },
+            .kind = .call_parameter,
+        };
+        ast_node_array.set(call_parameter_node_index, call_parameter_node) catch unreachable;
+        return call_parameter_node_index;
+    }
+
+    return null;
 }
 
 fn parseExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
@@ -1273,10 +1159,24 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_
 
         peek_token = lexer.peek();
         if (peek_token) |_peek_token| {
-            if (_peek_token.kind != .comma) {
-                break;
-            } else {
+            if (_peek_token.kind == .comma) {
                 _ = lexer.next();
+                peek_token = lexer.peek();
+                if (peek_token) |__peek_token| {
+                    if (__peek_token.kind == .r_brace) {
+                        break;
+                    }
+                } else {
+                    try error_report_array.addExpectedTokenReport("TypeEntry or '}'", .toPosition(lexer.current()));
+
+                    lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
+
+                    releaseASTNode(ast_node_array, expression_node_index.?);
+                    ast_node_array.free(type_expression_node_index) catch unreachable;
+                    return null;
+                }
+            } else {
+                break;
             }
         } else {
             try error_report_array.addExpectedTokenReport("',', or '}'", .toPosition(lexer.current()));
@@ -1615,10 +1515,26 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, er
 
         peek_token = lexer.peek();
         if (peek_token) |_peek_token| {
-            if (_peek_token.kind != .comma) {
-                break;
-            } else {
+            if (_peek_token.kind == .comma) {
                 _ = lexer.next();
+                peek_token = lexer.peek();
+                if (peek_token) |__peek_token| {
+                    if (__peek_token.kind == .r_paren) {
+                        break;
+                    }
+                } else {
+                    // XXX Error
+                    try error_report_array.addExpectedTokenReport(
+                        "Function Parameter Definition or ')'",
+                        .toPosition(lexer.current()),
+                    );
+
+                    lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
+                    ast_node_array.free(function_expression_node_index) catch unreachable;
+                    return null;
+                }
+            } else {
+                break;
             }
         } else {
             // XXX Error
@@ -1665,6 +1581,32 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, er
         return null;
     }
 
+    var first_function_attribute_node_index: ?usize = null;
+    var current_function_attribute_node_index: ?usize = null;
+    while (try parseFunctionAttribute(ast_node_array, lexer, error_report_array)) |function_attribute_node_index| {
+        if (first_function_attribute_node_index == null) {
+            first_function_attribute_node_index = function_attribute_node_index;
+        }
+
+        if (current_function_attribute_node_index) |_current_function_attribute_node_index| {
+            const current_function_attribute_node = ast_node_array.get(_current_function_attribute_node_index) catch unreachable;
+            const linked_function_attribute_node = ASTNode{
+                .data = .{
+                    .function_attribute = .{
+                        .expression = current_function_attribute_node.data.function_attribute.expression,
+                        .kind = current_function_attribute_node.data.function_attribute.kind,
+                        .next = function_attribute_node_index,
+                    },
+                },
+                .kind = .function_attribute,
+            };
+
+            ast_node_array.set(_current_function_attribute_node_index, linked_function_attribute_node) catch unreachable;
+        }
+
+        current_function_attribute_node_index = function_attribute_node_index;
+    }
+
     const expression = try parseExpression(ast_node_array, lexer, error_report_array);
 
     const function_expression_node = ASTNode{
@@ -1672,6 +1614,7 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, er
             .function_expression = .{
                 .expression = expression,
                 .parameter = first_function_parameter_node_index,
+                .attribute = first_function_attribute_node_index,
             },
         },
         .kind = .function_expression,
@@ -1679,6 +1622,77 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, er
 
     ast_node_array.set(function_expression_node_index, function_expression_node) catch unreachable;
     return function_expression_node_index;
+}
+
+fn parseFunctionAttribute(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Function Attribute at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Function Attribute at {any}", .{Module.Position.toPosition(lexer.current())});
+    const function_attribute_node_index = try ast_node_array.alloc();
+
+    var peek_token = lexer.peek();
+    var attribute_kind_token: Token = undefined;
+    if (peek_token) |_peek_token| {
+        if (_peek_token.kind != .keyword_internal and _peek_token.kind != .keyword_external) {
+            ast_node_array.free(function_attribute_node_index) catch unreachable;
+            return null;
+        }
+        attribute_kind_token = lexer.next();
+    } else {
+        ast_node_array.free(function_attribute_node_index) catch unreachable;
+        return null;
+    }
+
+    peek_token = lexer.peek();
+    if (peek_token) |_peek_token| {
+        if (_peek_token.kind != .l_paren) {
+            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
+            try error_report_array.addUnexpectedTokenReport("'('", .toRange(_peek_token), .toPosition(_peek_token));
+            ast_node_array.free(function_attribute_node_index) catch unreachable;
+            return null;
+        }
+        _ = lexer.next();
+    } else {
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
+        try error_report_array.addExpectedTokenReport("'('", .toPosition(lexer.current()));
+        ast_node_array.free(function_attribute_node_index) catch unreachable;
+        return null;
+    }
+
+    const expression = try parseSingleExpression(ast_node_array, lexer, error_report_array);
+
+    peek_token = lexer.peek();
+    if (peek_token) |_peek_token| {
+        if (_peek_token.kind != .r_paren) {
+            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
+            try error_report_array.addUnexpectedTokenReport("'('", .toRange(_peek_token), .toPosition(_peek_token));
+            ast_node_array.free(function_attribute_node_index) catch unreachable;
+            return null;
+        }
+        _ = lexer.next();
+    } else {
+        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
+        try error_report_array.addExpectedTokenReport("'('", .toPosition(lexer.current()));
+        ast_node_array.free(function_attribute_node_index) catch unreachable;
+        return null;
+    }
+
+    const function_attribute_node = ASTNode{
+        .data = .{
+            .function_attribute = .{
+                .expression = expression,
+                .kind = switch (attribute_kind_token.kind) {
+                    .keyword_internal => .internal,
+                    .keyword_external => .external,
+                    else => unreachable,
+                },
+                .next = null,
+            },
+        },
+        .kind = .function_attribute,
+    };
+
+    ast_node_array.set(function_attribute_node_index, function_attribute_node) catch unreachable;
+    return function_attribute_node_index;
 }
 
 fn parseLabelExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
@@ -2180,235 +2194,5 @@ fn parseContinueStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, err
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(continue_statement_node_index) catch unreachable;
         return null;
-    }
-}
-
-pub fn dump(ast_node_array: *ASTNodeArray, source: [:0]const u8, root_node_index: usize, space: u32) error{OutOfRange}!void {
-    const indent = 2;
-    // @breakpoint();
-    const root_node = try ast_node_array.get(root_node_index);
-
-    const printSpace = struct {
-        pub fn printSpace(_space: u32) void {
-            for (0.._space) |_| {
-                std.debug.print(" ", .{});
-            }
-        }
-    }.printSpace;
-
-    printSpace(space);
-
-    // std.debug.print("{d}:{any}", .{ root_node_index, root_node.kind });
-
-    switch (root_node.kind) {
-        .assignment_statement => {
-            std.debug.print("Assignment Statement:\n", .{});
-            try dump(ast_node_array, source, root_node.data.assignment_statement.target, space + indent);
-            try dump(ast_node_array, source, root_node.data.assignment_statement.expression, space + indent);
-        },
-        .assignment_target => {
-            std.debug.print("Assignment Target:\n", .{});
-            printSpace(space + indent);
-            std.debug.print("Access Attribute: {s}\n", .{
-                switch (root_node.data.assignment_target.access_attribute) {
-                    .in => "in",
-                    .inout => "inout",
-                    .out => "out",
-                    .none => "none",
-                },
-            });
-            printSpace(space + indent);
-            std.debug.print("Name: {s}\n", .{source[root_node.data.assignment_target.name.start..root_node.data.assignment_target.name.end]});
-            if (root_node.data.assignment_target.next) |next| {
-                return try dump(ast_node_array, source, next, space);
-            }
-        },
-        .block_expression => {
-            std.debug.print("Block Expression:\n", .{});
-            var current_statement = root_node.data.block_expression.statement;
-            while (current_statement) |_current_statement| {
-                const current_statement_node = try ast_node_array.get(_current_statement);
-                try dump(ast_node_array, source, _current_statement, space + indent);
-                current_statement = current_statement_node.data.statement.next;
-            }
-            try dump(ast_node_array, source, root_node.data.block_expression.expression, space + indent);
-        },
-        .call_expression => {
-            std.debug.print("Call Expression:\n", .{});
-            printSpace(space + indent);
-            std.debug.print("Target:\n", .{});
-            try dump(ast_node_array, source, root_node.data.call_expression.target, space + indent * 2);
-            if (root_node.data.call_expression.parameter) |parameter| {
-                try dump(ast_node_array, source, parameter, space + indent * 2);
-            }
-        },
-        .call_statement => {
-            std.debug.print("Call Statement:\n", .{});
-            try dump(ast_node_array, source, root_node.data.call_statement.call_expression, space + indent);
-        },
-        .expression => {
-            std.debug.print("Expression:\n", .{});
-            try dump(ast_node_array, source, root_node.data.expression.expression, space + indent);
-        },
-        .literal_expression => {
-            std.debug.print("Literal Expression:\n", .{});
-            printSpace(space + indent);
-            std.debug.print("{s}: {s}\n", .{
-                switch (root_node.data.literal_expression.kind) {
-                    .char => "char",
-                    .float => "float",
-                    .identifier => "identifier",
-                    .integer => "integer",
-                    .string => "string",
-                    .macro => "macro",
-                    .underline => "underline",
-                    .nil => "nil",
-                },
-                source[root_node.data.literal_expression.position.start..root_node.data.literal_expression.position.end],
-            });
-        },
-        .root => {
-            std.debug.print("Root:\n", .{});
-            try dump(ast_node_array, source, root_node.data.root.containor, space + indent);
-        },
-        .statement => {
-            std.debug.print("Statement:\n", .{});
-            try dump(ast_node_array, source, root_node.data.statement.statement, space + indent);
-        },
-        .function_expression => {
-            std.debug.print("Function Expression:\n", .{});
-            var current_parameter = root_node.data.function_expression.parameter;
-            while (current_parameter) |_current_parameter| {
-                const current_parameter_node = try ast_node_array.get(_current_parameter);
-                try dump(ast_node_array, source, _current_parameter, space + indent);
-                current_parameter = current_parameter_node.data.function_parameter.next;
-            }
-
-            if (root_node.data.function_expression.expression) |expression| {
-                try dump(ast_node_array, source, expression, space + indent);
-            }
-        },
-        .function_parameter => {
-            std.debug.print("Function Parameter:\n", .{});
-            printSpace(space + indent);
-            std.debug.print("Access Attribute: {s}\n", .{
-                switch (root_node.data.function_parameter.access_attribute) {
-                    .in => "in",
-                    .inout => "inout",
-                    .out => "out",
-                },
-            });
-            printSpace(space + indent);
-            std.debug.print("Name: {s}\n", .{source[root_node.data.function_parameter.name.start..root_node.data.function_parameter.name.end]});
-            try dump(ast_node_array, source, root_node.data.function_parameter.expression, space + indent * 2);
-        },
-        .type_entry => {
-            std.debug.print("Type Entry:\n", .{});
-
-            printSpace(space + indent);
-            std.debug.print("Name: {s}\n", .{source[root_node.data.type_entry.name.start..root_node.data.type_entry.name.end]});
-
-            if (root_node.data.type_entry.expression) |expression| {
-                printSpace(space + indent);
-                std.debug.print("Expression:\n", .{});
-                try dump(ast_node_array, source, expression, space + indent * 2);
-            }
-
-            if (root_node.data.type_entry.next) |next| {
-                return try dump(ast_node_array, source, next, space);
-            }
-        },
-        .type_expression => {
-            std.debug.print("Type Expression:\n", .{});
-
-            printSpace(space + indent);
-            std.debug.print("Type Constuctor:\n", .{});
-            try dump(ast_node_array, source, root_node.data.type_expression.kind, space + indent * 2);
-            if (root_node.data.type_expression.entry) |entry| {
-                printSpace(space + indent);
-                std.debug.print("Entry:\n", .{});
-                try dump(ast_node_array, source, entry, space + indent * 2);
-            }
-        },
-        .break_statement => {
-            std.debug.print("Break Statement:\n", .{});
-
-            printSpace(space + indent);
-            std.debug.print("Target: {s}\n", .{source[root_node.data.break_statement.name.start..root_node.data.break_statement.name.end]});
-            printSpace(space + indent);
-            std.debug.print("Expression:\n", .{});
-            try dump(ast_node_array, source, root_node.data.break_statement.expression, space + indent * 2);
-        },
-        .continue_statement => {
-            std.debug.print("Continue Statement:\n", .{});
-
-            printSpace(space + indent);
-            std.debug.print("Target: {s}\n", .{source[root_node.data.continue_statement.name.start..root_node.data.continue_statement.name.end]});
-            printSpace(space + indent);
-            std.debug.print("Expression:\n", .{});
-            try dump(ast_node_array, source, root_node.data.continue_statement.expression, space + indent * 2);
-        },
-        .label_expression => {
-            std.debug.print("Label Expression:\n", .{});
-
-            printSpace(space + indent);
-            std.debug.print("Label:\n", .{});
-            try dump(ast_node_array, source, root_node.data.label_expression.label, space + indent * 2);
-            printSpace(space + indent);
-            std.debug.print("Expression:\n", .{});
-            try dump(ast_node_array, source, root_node.data.label_expression.expression, space + indent * 2);
-        },
-        .match_case => {
-            std.debug.print("Match Case:\n", .{});
-
-            const internal_label_expression = try ast_node_array.get(root_node.data.match_case.expression);
-            // XXX Don't forget Match Case use Label Expression's internal data!
-
-            printSpace(space + indent);
-            std.debug.print("Case:\n", .{});
-            try dump(ast_node_array, source, internal_label_expression.data.label_expression.label, space + indent * 2);
-            printSpace(space + indent);
-            std.debug.print("Expression:\n", .{});
-            try dump(ast_node_array, source, internal_label_expression.data.label_expression.expression, space + indent * 2);
-        },
-        .match_expression => {
-            std.debug.print("Match Expression:\n", .{});
-
-            printSpace(space + indent);
-            std.debug.print("Condition:\n", .{});
-            try dump(ast_node_array, source, root_node.data.match_expression.expression, space + indent * 2);
-
-            var current_case_node_index = root_node.data.match_expression.case;
-            while (current_case_node_index) |_current_case_node_index| {
-                const current_case_node = try ast_node_array.get(_current_case_node_index);
-                try dump(ast_node_array, source, _current_case_node_index, space + indent * 2);
-                current_case_node_index = current_case_node.data.match_case.next;
-            }
-        },
-        .attributed_expression => {
-            std.debug.print("Attributed Expression:\n", .{});
-            printSpace(space + indent);
-            std.debug.print("Attrubute: {s}\n", .{
-                switch (root_node.data.attributed_expression.kind) {
-                    .in => "in",
-                    .inout => "inout",
-                    .out => "out",
-                    .ptr => "ptr",
-                    .ref => "ref",
-                },
-            });
-
-            try dump(ast_node_array, source, root_node.data.attributed_expression.expression, space + indent);
-        },
-        .multiple_expression => {
-            std.debug.print("Multiple Expression:\n", .{});
-
-            var current_expression_node_index: ?usize = root_node_index;
-            while (current_expression_node_index) |_current_expression_node_index| {
-                const current_expression_node = try ast_node_array.get(_current_expression_node_index);
-                try dump(ast_node_array, source, current_expression_node.data.multiple_expression.expression, space + indent);
-                current_expression_node_index = current_expression_node.data.multiple_expression.next;
-            }
-        },
     }
 }
