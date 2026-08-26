@@ -57,6 +57,10 @@ pub fn parseRoot(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report
                     .containor = _containor_node_index,
                 },
             },
+            .position = .{
+                .line = 1,
+                .pos = 1,
+            },
         };
 
         ast_node_array.set(ast_node_index, ast_node) catch unreachable;
@@ -109,6 +113,7 @@ fn parseBlockExpressionContent(ast_node_array: *ASTNodeArray, lexer: *TokenArray
                 .statement = null,
             },
         },
+        .position = undefined,
     };
 
     var first_statement_node_index: ?usize = null;
@@ -128,6 +133,7 @@ fn parseBlockExpressionContent(ast_node_array: *ASTNodeArray, lexer: *TokenArray
                         .statement = current_statement_node.data.statement.statement,
                     },
                 },
+                .position = .toPosition(lexer.current()),
             };
             ast_node_array.set(_current_statement_node_index, linked_statement_node) catch unreachable;
         }
@@ -143,6 +149,7 @@ fn parseBlockExpressionContent(ast_node_array: *ASTNodeArray, lexer: *TokenArray
                     .expression = undefined,
                 },
             },
+            .position = .toPosition(lexer.current()),
         };
     }
 
@@ -155,6 +162,7 @@ fn parseBlockExpressionContent(ast_node_array: *ASTNodeArray, lexer: *TokenArray
                     .expression = expression_node_index,
                 },
             },
+            .position = .toPosition(lexer.current()),
         };
         ast_node_array.set(ast_node_index, block_expression_node) catch unreachable;
         return ast_node_index;
@@ -186,6 +194,7 @@ fn parseStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_repor
                     .next = null,
                 },
             },
+            .position = .toPosition(lexer.current()),
         };
 
         // Should this have error report?
@@ -205,6 +214,7 @@ fn parseStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_repor
                     .next = null,
                 },
             },
+            .position = .toPosition(lexer.current()),
         };
 
         // Should this have error report?
@@ -224,6 +234,7 @@ fn parseStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_repor
                     .next = null,
                 },
             },
+            .position = .toPosition(lexer.current()),
         };
 
         // Should this have error report?
@@ -243,6 +254,7 @@ fn parseStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_repor
                     .next = null,
                 },
             },
+            .position = .toPosition(lexer.current()),
         };
 
         // Should this have error report?
@@ -262,6 +274,7 @@ fn parseStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_repor
                     .next = null,
                 },
             },
+            .position = .toPosition(lexer.current()),
         };
 
         // Should this have error report?
@@ -298,6 +311,7 @@ fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, e
                     },
                 },
                 .kind = .assignment_target,
+                .position = .toPosition(lexer.current()),
             };
 
             ast_node_array.set(_current_target_node_index, linked_target_node) catch unreachable;
@@ -387,6 +401,7 @@ fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, e
                     },
                 },
                 .kind = .assignment_statement,
+                .position = .toPosition(lexer.current()),
             };
 
             ast_node_array.set(assignment_node_index, assignment_node) catch unreachable;
@@ -451,6 +466,7 @@ fn parseAssignmentTarget(ast_node_array: *ASTNodeArray, lexer: *TokenArray, erro
                             },
                         },
                         .kind = .assignment_target,
+                        .position = .toPosition(lexer.current()),
                     };
 
                     ast_node_array.set(assignment_target_node_index, assignment_target_node) catch unreachable;
@@ -495,6 +511,7 @@ fn parseAssignmentTarget(ast_node_array: *ASTNodeArray, lexer: *TokenArray, erro
                     },
                 },
                 .kind = .assignment_target,
+                .position = .toPosition(lexer.current()),
             };
 
             ast_node_array.set(assignment_target_node_index, assignment_target_node) catch unreachable;
@@ -526,6 +543,7 @@ fn parseCallStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_r
                         },
                     },
                     .kind = .call_statement,
+                    .position = .toPosition(lexer.current()),
                 };
 
                 ast_node_array.set(call_statement_node_index, call_statement_node) catch unreachable;
@@ -601,6 +619,7 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_
                         },
                     },
                     .kind = .call_parameter,
+                    .position = .toPosition(lexer.current()),
                 };
 
                 ast_node_array.set(_current_call_parameter_node_index, linked_call_parameter_node) catch unreachable;
@@ -703,6 +722,7 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_
                 },
             },
             .kind = .call_expression,
+            .position = .toPosition(lexer.current()),
         };
 
         ast_node_array.set(call_expression_node_index, call_expression_node) catch unreachable;
@@ -727,6 +747,7 @@ fn parseCallParameter(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_r
                 },
             },
             .kind = .call_parameter,
+            .position = .toPosition(lexer.current()),
         };
         ast_node_array.set(call_parameter_node_index, call_parameter_node) catch unreachable;
         return call_parameter_node_index;
@@ -771,6 +792,7 @@ fn parseSingleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, erro
                             .kind = .commented,
                         },
                     },
+                    .position = .toPosition(lexer.current()),
                 };
 
                 ast_node_array.set(expression_node_index, expression_node) catch unreachable;
@@ -792,6 +814,7 @@ fn parseSingleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, erro
                             .kind = .label,
                         },
                     },
+                    .position = .toPosition(lexer.current()),
                 };
 
                 ast_node_array.set(expression_node_index, expression_node) catch unreachable;
@@ -809,6 +832,7 @@ fn parseSingleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, erro
                         .kind = .call,
                     },
                 },
+                .position = .toPosition(lexer.current()),
             };
 
             ast_node_array.set(expression_node_index, expression_node) catch unreachable;
@@ -826,6 +850,7 @@ fn parseSingleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, erro
                         .kind = .literal,
                     },
                 },
+                .position = .toPosition(lexer.current()),
             };
 
             ast_node_array.set(expression_node_index, expression_node) catch unreachable;
@@ -844,6 +869,7 @@ fn parseSingleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, erro
                             .kind = .match,
                         },
                     },
+                    .position = .toPosition(lexer.current()),
                 };
 
                 ast_node_array.set(expression_node_index, expression_node) catch unreachable;
@@ -863,6 +889,7 @@ fn parseSingleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, erro
                             .kind = .attributed,
                         },
                     },
+                    .position = .toPosition(lexer.current()),
                 };
 
                 ast_node_array.set(expression_node_index, expression_node) catch unreachable;
@@ -882,6 +909,7 @@ fn parseSingleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, erro
                             .kind = .type,
                         },
                     },
+                    .position = .toPosition(lexer.current()),
                 };
 
                 ast_node_array.set(expression_node_index, expression_node) catch unreachable;
@@ -900,6 +928,7 @@ fn parseSingleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, erro
                             .kind = .function,
                         },
                     },
+                    .position = .toPosition(lexer.current()),
                 };
 
                 ast_node_array.set(expression_node_index, expression_node) catch unreachable;
@@ -918,6 +947,7 @@ fn parseSingleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, erro
                             .kind = .block,
                         },
                     },
+                    .position = .toPosition(lexer.current()),
                 };
 
                 ast_node_array.set(expression_node_index, expression_node) catch unreachable;
@@ -957,6 +987,7 @@ fn parseMultipleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, er
                             .next = multiple_expression_node_index,
                         },
                     },
+                    .position = .toPosition(lexer.current()),
                 };
 
                 ast_node_array.set(_current_expression_node_index, linked_expression_node) catch unreachable;
@@ -972,6 +1003,7 @@ fn parseMultipleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, er
                         .next = null,
                     },
                 },
+                .position = .toPosition(lexer.current()),
             };
             ast_node_array.set(multiple_expression_node_index, multiple_expression_node) catch unreachable;
         }
@@ -1022,6 +1054,7 @@ fn parseLiteralExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, err
                     },
                 },
                 .kind = .literal_expression,
+                .position = .toPosition(lexer.current()),
             };
 
             ast_node_array.set(literal_expression_node_index, literal_expression_node) catch unreachable;
@@ -1191,6 +1224,7 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_
                     },
                 },
                 .kind = .type_entry,
+                .position = .toPosition(lexer.current()),
             };
             ast_node_array.set(_current_type_entry_node_index, linked_type_entry_node) catch unreachable;
         }
@@ -1273,6 +1307,7 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_
             },
         },
         .kind = .type_expression,
+        .position = .toPosition(lexer.current()),
     };
     ast_node_array.set(type_expression_node_index, type_expression_node) catch unreachable;
     return type_expression_node_index;
@@ -1322,6 +1357,7 @@ fn parseTypeEntry(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_repor
                     },
                 },
                 .kind = .type_entry,
+                .position = .toPosition(lexer.current()),
             };
 
             ast_node_array.set(type_entry_node_index, type_entry_node) catch unreachable;
@@ -1358,6 +1394,7 @@ fn parseTypeEntry(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_repor
             },
         },
         .kind = .type_entry,
+        .position = .toPosition(lexer.current()),
     };
 
     ast_node_array.set(type_entry_node_index, type_entry_node) catch unreachable;
@@ -1461,6 +1498,7 @@ fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *TokenArray, err
                 },
             },
             .kind = .function_parameter,
+            .position = .toPosition(lexer.current()),
         };
         ast_node_array.set(function_parameter_node_index, function_parameter_node) catch unreachable;
         return function_parameter_node_index;
@@ -1546,6 +1584,7 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, er
                     },
                 },
                 .kind = .function_parameter,
+                .position = .toPosition(lexer.current()),
             };
 
             ast_node_array.set(_current_function_parameter_node_index, linked_function_parameter_node) catch unreachable;
@@ -1639,6 +1678,7 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, er
                     },
                 },
                 .kind = .function_attribute,
+                .position = .toPosition(lexer.current()),
             };
 
             ast_node_array.set(_current_function_attribute_node_index, linked_function_attribute_node) catch unreachable;
@@ -1658,6 +1698,7 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, er
             },
         },
         .kind = .function_expression,
+        .position = .toPosition(lexer.current()),
     };
 
     ast_node_array.set(function_expression_node_index, function_expression_node) catch unreachable;
@@ -1729,6 +1770,7 @@ fn parseFunctionAttribute(ast_node_array: *ASTNodeArray, lexer: *TokenArray, err
             },
         },
         .kind = .function_attribute,
+        .position = .toPosition(lexer.current()),
     };
 
     ast_node_array.set(function_attribute_node_index, function_attribute_node) catch unreachable;
@@ -1770,6 +1812,7 @@ fn parseLabelExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error
                 },
             },
             .kind = .label_expression,
+            .position = .toPosition(lexer.current()),
         };
         ast_node_array.set(label_expression_node_index, label_expression_node) catch unreachable;
         return label_expression_node_index;
@@ -1897,6 +1940,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error
                     },
                 },
                 .kind = .match_case,
+                .position = .toPosition(lexer.current()),
             };
 
             ast_node_array.set(_current_match_case_node_index, linked_match_case_node) catch unreachable;
@@ -1956,6 +2000,7 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error
             },
         },
         .kind = .match_expression,
+        .position = .toPosition(lexer.current()),
     };
 
     ast_node_array.set(match_expression_node_index, match_expression_node) catch unreachable;
@@ -2000,6 +2045,7 @@ fn parseMatchCase(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_repor
                 },
             },
             .kind = .match_case,
+            .position = .toPosition(lexer.current()),
         };
 
         ast_node_array.set(match_case_node_index, match_case_node) catch unreachable;
@@ -2039,6 +2085,7 @@ fn parseAttributedExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, 
                         },
                     },
                     .kind = .attributed_expression,
+                    .position = .toPosition(lexer.current()),
                 };
 
                 ast_node_array.set(attributed_expression_node_index, attributed_expression_node) catch unreachable;
@@ -2120,6 +2167,7 @@ fn parseBreakStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_
                         },
                     },
                     .kind = .break_statement,
+                    .position = .toPosition(lexer.current()),
                 };
                 ast_node_array.set(break_statement_node_index, break_statement_node) catch unreachable;
                 return break_statement_node_index;
@@ -2208,6 +2256,7 @@ fn parseContinueStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, err
                         },
                     },
                     .kind = .continue_statement,
+                    .position = .toPosition(lexer.current()),
                 };
                 ast_node_array.set(continue_statement_node_index, continue_statement_node) catch unreachable;
                 return continue_statement_node_index;
@@ -2261,6 +2310,7 @@ fn parseCommentedStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, er
                         },
                     },
                     .kind = .comment,
+                    .position = .toPosition(lexer.current()),
                 };
 
                 ast_node_array.set(commented_statement_node_index, commented_statement_node) catch unreachable;
@@ -2274,6 +2324,7 @@ fn parseCommentedStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, er
                         .range = .toRange(_peek_token),
                     },
                 },
+                .position = .toPosition(lexer.current()),
                 .kind = .comment,
             };
 
@@ -2310,6 +2361,7 @@ fn parseCommentedSingleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenAr
                         },
                     },
                     .kind = .comment,
+                    .position = .toPosition(lexer.current()),
                 };
 
                 ast_node_array.set(commented_single_expression_node_index, commented_single_expression_node) catch unreachable;
@@ -2324,6 +2376,7 @@ fn parseCommentedSingleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenAr
                     },
                 },
                 .kind = .comment,
+                .position = .toPosition(lexer.current()),
             };
 
             ast_node_array.set(commented_single_expression_node_index, commented_single_expression_node) catch unreachable;

@@ -17,11 +17,13 @@
 const std = @import("std");
 const aslib = @import("aslib");
 const _format = @import("format.zig");
+const ast = @import("ast.zig");
 const Lexer = @import("lexer.zig");
 const Parser = @import("parser.zig");
 const ErrorReportArray = @import("error.zig").ErrorReportArray;
 const TokenArray = @import("token_array.zig").TokenArray;
-const ASTNodeArray = @import("ast.zig").ASTNodeArray;
+const ASTNodeArray = ast.ASTNodeArray;
+
 const Module = @This();
 
 pub const Position = struct {
@@ -156,4 +158,8 @@ pub fn format(module: *const Module, writer: *std.Io.Writer) !void {
     if (module.source != null and module.ast_node_root != null) {
         try _format.formatRoot(&module.ast_node_array, module.source.?, module.ast_node_root.?, writer);
     }
+}
+
+pub fn simplify(module: *Module) error{ OutOfRange, OutOfCapacity }!void {
+    module.ast_node_root = try ast.simplify(&module.ast_node_array, &module.error_report_array, module.ast_node_root);
 }

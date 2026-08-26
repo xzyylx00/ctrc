@@ -16,6 +16,7 @@
 
 const std = @import("std");
 const Module = @import("module.zig");
+const ast = @import("ast.zig");
 
 pub const ErrorReport = struct {
     position: Module.Position,
@@ -25,6 +26,7 @@ pub const ErrorReport = struct {
         expected_token: ExpectedToken,
         unexpected_token: UnexpectedToken,
         invalid_character: InvalidCharacter,
+        unexpected_node: UnexpectedNode,
     },
 
     const InvalidCharacter = struct {
@@ -40,6 +42,11 @@ pub const ErrorReport = struct {
         expected: [:0]const u8,
     };
 
+    const UnexpectedNode = struct {
+        expected: [:0]const u8,
+        found: ast.ASTNode.Kind,
+    };
+
     const ErrorReportKind = enum {
         // Lexer
         invalid_character,
@@ -48,6 +55,11 @@ pub const ErrorReport = struct {
         unexpected_token,
         expected_token,
         expected_expression,
+
+        // AST Simplify
+        // expected_expression
+        expected_literal_expression,
+        unexpected_node,
     };
 
     pub fn report(error_report: ErrorReport, source: [:0]const u8) void {
@@ -61,8 +73,14 @@ pub const ErrorReport = struct {
             .expected_expression => {
                 std.log.debug("Expected Expression at {d}:{d}", .{ error_report.position.line, error_report.position.pos });
             },
+            .expected_literal_expression => {
+                std.log.debug("Expected Literal Expression at {d}:{d}", .{ error_report.position.line, error_report.position.pos });
+            },
             .invalid_character => {
                 std.log.debug("Invalid Character at {d}:{d}", .{ error_report.position.line, error_report.position.pos });
+            },
+            .unexpected_node => {
+                std.log.debug("Unexpected Node at {d}:{d}, expect {s}, found {any}", .{ error_report.position.line, error_report.position.pos, error_report.data.unexpected_node.expected, error_report.data.unexpected_node.found });
             },
         }
     }
@@ -119,6 +137,19 @@ pub const ErrorReportArray = struct {
         });
     }
 
+    pub fn addUnexpectedNodeReport(error_report_array: *ErrorReportArray, expected: [:0]const u8, found: ast.ASTNode.Kind, position: Module.Position) error{OutOfCapacity}!void {
+        try error_report_array.addReport(.{
+            .kind = .unexpected_node,
+            .data = .{
+                .unexpected_node = .{
+                    .found = found,
+                    .expected = expected,
+                },
+            },
+            .position = position,
+        });
+    }
+
     pub fn addExpectedTokenReport(error_report_array: *ErrorReportArray, expected: [:0]const u8, position: Module.Position) error{OutOfCapacity}!void {
         try error_report_array.addReport(.{
             .kind = .expected_token,
@@ -134,6 +165,14 @@ pub const ErrorReportArray = struct {
     pub fn addExpectedExpressionReport(error_report_array: *ErrorReportArray, position: Module.Position) error{OutOfCapacity}!void {
         try error_report_array.addReport(.{
             .kind = .expected_expression,
+            .data = undefined,
+            .position = position,
+        });
+    }
+
+    pub fn addExpectedLiteralExpressionReport(error_report_array: *ErrorReportArray, position: Module.Position) error{OutOfCapacity}!void {
+        try error_report_array.addReport(.{
+            .kind = .expected_literal_expression,
             .data = undefined,
             .position = position,
         });

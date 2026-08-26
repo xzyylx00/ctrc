@@ -27,6 +27,10 @@ pub fn main(args: std.process.Init) !u8 {
     const writer = &stdout_writer.interface;
     try module.format(writer);
     try writer.flush();
+    try module.simplify();
+    try module.format(writer);
+    try writer.flush();
+    module.report();
     return 0;
 }
 
