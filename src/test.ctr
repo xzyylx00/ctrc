@@ -8,12 +8,12 @@ _ = myAlloc;
 
 in typee = type("Entry") {
     aaA,
-    AAAA
+    AAAA,
 };
 
 in fib = function(in num: uint64, ) external("c");
 
-in main = function()c: match(1) {
+in main = function(){c: match(1) {
     case _: {
         std.debug.print(fib(_,));
         continue c add(_, 1);
@@ -22,6 +22,7 @@ in main = function()c: match(1) {
     case 9: {
         break c nil;
         nil, nil
+    }
     }
 };
 main

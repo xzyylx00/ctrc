@@ -16,6 +16,7 @@
 
 const std = @import("std");
 const aslib = @import("aslib");
+const _format = @import("format.zig");
 const Lexer = @import("lexer.zig");
 const Parser = @import("parser.zig");
 const ErrorReportArray = @import("error.zig").ErrorReportArray;
@@ -148,5 +149,11 @@ pub fn parse(module: *Module) error{OutOfCapacity}!void {
 pub fn report(module: *Module) void {
     if (module.source) |source| {
         module.error_report_array.report(source);
+    }
+}
+
+pub fn format(module: *const Module, writer: *std.Io.Writer) !void {
+    if (module.source != null and module.ast_node_root != null) {
+        try _format.formatRoot(&module.ast_node_array, module.source.?, module.ast_node_root.?, writer);
     }
 }

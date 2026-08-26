@@ -20,6 +20,13 @@ pub fn main(args: std.process.Init) !u8 {
     }
     module.report();
     std.debug.print("{d} {any}\n", .{ module.error_report_array.used, module.ast_node_root });
+
+    var stdout_buf: [1024]u8 = undefined;
+    const stdout = std.Io.File.stdout();
+    var stdout_writer = stdout.writer(args.io, &stdout_buf);
+    const writer = &stdout_writer.interface;
+    try module.format(writer);
+    try writer.flush();
     return 0;
 }
 

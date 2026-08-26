@@ -768,7 +768,7 @@ fn parseSingleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, erro
                     .data = .{
                         .expression = .{
                             .expression = commented_expression_index,
-                            .kind = .label,
+                            .kind = .commented,
                         },
                     },
                 };

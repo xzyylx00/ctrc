@@ -159,6 +159,7 @@ pub const ASTNode = struct {
             literal,
             label,
             attributed,
+            commented,
         };
 
         kind: ExpressionKind,
