@@ -30,6 +30,7 @@ pub const ASTNode = struct {
         call_expression,
         call_statement,
         call_parameter,
+        comment,
         type_expression,
         type_entry,
         function_expression,
@@ -83,6 +84,12 @@ pub const ASTNode = struct {
         next: ?usize,
     };
 
+    const Comment = struct {
+        line: usize,
+        range: Module.Range,
+        next: ?usize,
+    };
+
     const BlockExpression = struct {
         statement: ?usize,
         expression: usize,
@@ -132,6 +139,7 @@ pub const ASTNode = struct {
         const StatementKind = enum {
             assignment,
             call,
+            commented,
             @"break",
             @"continue",
         };
@@ -249,6 +257,7 @@ pub const ASTNode = struct {
         match_case: MatchCase,
         attributed_expression: AttributedExpression,
         multiple_expression: MultipleExpression,
+        comment: Comment,
     },
 };
 
@@ -512,5 +521,17 @@ pub fn dump(ast_node_array: *ASTNodeArray, source: [:0]const u8, root_node_index
                 current_expression_node_index = current_expression_node.data.multiple_expression.next;
             }
         },
+        .comment => {
+            std.debug.print("Comment: {s}\n", .{source[root_node.data.comment.range.start..root_node.data.comment.range.end]});
+            if (root_node.data.comment.next) |next| {
+                try dump(ast_node_array, source, next, space);
+            }
+        },
     }
+}
+
+pub fn simplify(ast_node_array: *ASTNodeArray, root_node_index: usize) error{OutOfRange}!usize {
+    _ = ast_node_array;
+    _ = root_node_index;
+    return 0;
 }

@@ -176,6 +176,25 @@ fn parseStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_repor
     const statement_node_index = try ast_node_array.alloc();
     const previous_lexer = lexer.*;
 
+    if (try parseCommentedStatement(ast_node_array, lexer, error_report_array)) |commented_statement| {
+        const statement_node = ASTNode{
+            .kind = .statement,
+            .data = .{
+                .statement = .{
+                    .kind = .commented,
+                    .statement = commented_statement,
+                    .next = null,
+                },
+            },
+        };
+
+        // Should this have error report?
+        ast_node_array.set(statement_node_index, statement_node) catch unreachable;
+        return statement_node_index;
+    } else {
+        lexer.* = previous_lexer;
+    }
+
     if (try parseAssignmentStatement(ast_node_array, lexer, error_report_array)) |assignment_node_index| {
         const statement_node = ASTNode{
             .kind = .statement,
@@ -741,6 +760,27 @@ fn parseSingleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, erro
     const previous_lexer = lexer.*;
 
     const peek_token = lexer.peek();
+    if (peek_token) |_peek_token| {
+        if (_peek_token.kind == .comment) {
+            if (try parseCommentedSingleExpression(ast_node_array, lexer, error_report_array)) |commented_expression_index| {
+                const expression_node = ASTNode{
+                    .kind = .expression,
+                    .data = .{
+                        .expression = .{
+                            .expression = commented_expression_index,
+                            .kind = .label,
+                        },
+                    },
+                };
+
+                ast_node_array.set(expression_node_index, expression_node) catch unreachable;
+                return expression_node_index;
+            } else {
+                lexer.* = previous_lexer;
+            }
+        }
+    }
+
     if (peek_token) |_peek_token| {
         if (_peek_token.kind == .identifier) {
             if (try parseLabelExpression(ast_node_array, lexer, error_report_array)) |label_expression_index| {
@@ -2193,6 +2233,104 @@ fn parseContinueStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, err
 
         lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
         ast_node_array.free(continue_statement_node_index) catch unreachable;
+        return null;
+    }
+}
+
+fn parseCommentedStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Commented Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Commented Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+
+    const commented_statement_node_index = try ast_node_array.alloc();
+    // Release
+
+    const peek_token = lexer.peek();
+    if (peek_token) |_peek_token| {
+        if (_peek_token.kind != .comment) {
+            ast_node_array.free(commented_statement_node_index) catch unreachable;
+            return null;
+        } else {
+            _ = lexer.next();
+            if (try parseStatement(ast_node_array, lexer, error_report_array)) |statement| {
+                const commented_statement_node = ASTNode{
+                    .data = .{
+                        .comment = .{
+                            .line = _peek_token.line,
+                            .next = statement,
+                            .range = .toRange(_peek_token),
+                        },
+                    },
+                    .kind = .comment,
+                };
+
+                ast_node_array.set(commented_statement_node_index, commented_statement_node) catch unreachable;
+                return commented_statement_node_index;
+            }
+            const commented_statement_node = ASTNode{
+                .data = .{
+                    .comment = .{
+                        .line = _peek_token.line,
+                        .next = null,
+                        .range = .toRange(_peek_token),
+                    },
+                },
+                .kind = .comment,
+            };
+
+            ast_node_array.set(commented_statement_node_index, commented_statement_node) catch unreachable;
+            return commented_statement_node_index;
+        }
+    } else {
+        // Error handle
+        return null;
+    }
+}
+
+fn parseCommentedSingleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
+    std.log.debug("Parsing Commented Single Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    defer std.log.debug("Leaving Commented Single Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+
+    const commented_single_expression_node_index = try ast_node_array.alloc();
+    // Release
+
+    const peek_token = lexer.peek();
+    if (peek_token) |_peek_token| {
+        if (_peek_token.kind != .comment) {
+            ast_node_array.free(commented_single_expression_node_index) catch unreachable;
+            return null;
+        } else {
+            _ = lexer.next();
+            if (try parseSingleExpression(ast_node_array, lexer, error_report_array)) |single_expression_index| {
+                const commented_single_expression_node = ASTNode{
+                    .data = .{
+                        .comment = .{
+                            .line = _peek_token.line,
+                            .next = single_expression_index,
+                            .range = .toRange(_peek_token),
+                        },
+                    },
+                    .kind = .comment,
+                };
+
+                ast_node_array.set(commented_single_expression_node_index, commented_single_expression_node) catch unreachable;
+                return commented_single_expression_node_index;
+            }
+            const commented_single_expression_node = ASTNode{
+                .data = .{
+                    .comment = .{
+                        .line = _peek_token.line,
+                        .next = null,
+                        .range = .toRange(_peek_token),
+                    },
+                },
+                .kind = .comment,
+            };
+
+            ast_node_array.set(commented_single_expression_node_index, commented_single_expression_node) catch unreachable;
+            return commented_single_expression_node_index;
+        }
+    } else {
+        // Error handle
         return null;
     }
 }

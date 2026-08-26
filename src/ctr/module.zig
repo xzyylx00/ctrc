@@ -61,15 +61,8 @@ pub const Range = struct {
     }
 };
 
-const Comment = struct {
-    line: usize,
-    start: usize,
-    end: usize,
-};
-
 source: ?[:0]const u8,
 token_array: ?TokenArray,
-comment: ?[]Comment,
 error_report_array: ErrorReportArray,
 ast_node_array: ASTNodeArray,
 ast_node_root: ?usize,
@@ -86,7 +79,6 @@ pub fn init(allocator: std.mem.Allocator, error_report_array_size: u32, ast_node
         .allocator = allocator,
         .ast_node_array = ast_node_array,
         .error_report_array = error_report_array,
-        .comment = null,
         .source = null,
         .token_array = null,
         .ast_node_root = null,
@@ -100,15 +92,10 @@ pub fn deinit(module: *Module) void {
         module.allocator.free(token_array.tokens);
     }
 
-    if (module.comment) |comment| {
-        module.allocator.free(comment);
-    }
-
     module.* = Module{
         .allocator = undefined,
         .ast_node_array = undefined,
         .error_report_array = undefined,
-        .comment = null,
         .ast_node_root = null,
         .source = null,
         .token_array = null,
@@ -120,49 +107,30 @@ pub fn lex(module: *Module, source: [:0]const u8) error{ OutOfMemory, OutOfCapac
     var lexer = Lexer.init(source);
 
     var token_count: usize = 0;
-    var comment_count: usize = 0;
     while (true) {
         const token = try lexer.next(&module.error_report_array);
+        token_count += 1;
         if (token.kind == .eof) {
-            token_count += 1;
             break;
-        } else if (token.kind == .comment) {
-            comment_count += 1;
-        } else {
-            token_count += 1;
         }
     }
     const token_array = try module.allocator.alloc(Lexer.Token, token_count);
     errdefer module.allocator.free(token_array);
-    const comment = try module.allocator.alloc(Comment, comment_count);
-    errdefer module.allocator.free(comment);
     module.token_array = TokenArray{
         .tokens = token_array,
         ._current = null,
     };
-    module.comment = comment;
-
     module.error_report_array.clear();
 
     lexer = Lexer.init(source);
 
     var token_index: usize = 0;
-    var comment_index: usize = 0;
     while (true) {
         const token = try lexer.next(&module.error_report_array);
-        if (token.kind != .comment) {
-            token_array[token_index] = token;
-            token_index += 1;
-            if (token.kind == .eof) {
-                break;
-            }
-        } else {
-            comment[comment_index] = Comment{
-                .line = token.line,
-                .start = token.start,
-                .end = token.end,
-            };
-            comment_index += 1;
+        token_array[token_index] = token;
+        token_index += 1;
+        if (token.kind == .eof) {
+            break;
         }
     }
 }
