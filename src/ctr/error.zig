@@ -62,25 +62,25 @@ pub const ErrorReport = struct {
         unexpected_node,
     };
 
-    pub fn report(error_report: ErrorReport, source: [:0]const u8) void {
+    pub fn report(error_report: ErrorReport, source: [:0]const u8, file_name: []const u8) void {
         switch (error_report.kind) {
             .unexpected_token => {
-                std.log.debug("Unexpected Token at {d}:{d}, expect {s}, found {s}", .{ error_report.position.line, error_report.position.pos, error_report.data.unexpected_token.expected, source[error_report.data.unexpected_token.found.start..error_report.data.unexpected_token.found.end] });
+                std.log.debug("{s}:{d}:{d}: Unexpected Token, expect {s}, found {s}", .{ file_name, error_report.position.line, error_report.position.pos, error_report.data.unexpected_token.expected, source[error_report.data.unexpected_token.found.start..error_report.data.unexpected_token.found.end] });
             },
             .expected_token => {
-                std.log.debug("Expected Token at {d}:{d}, expect {s}", .{ error_report.position.line, error_report.position.pos, error_report.data.expected_token.expected });
+                std.log.debug("{s}:{d}:{d}: Expected Token, expect {s}", .{ file_name, error_report.position.line, error_report.position.pos, error_report.data.expected_token.expected });
             },
             .expected_expression => {
-                std.log.debug("Expected Expression at {d}:{d}", .{ error_report.position.line, error_report.position.pos });
+                std.log.debug("{s}:{d}:{d}: Expected Expression", .{ file_name, error_report.position.line, error_report.position.pos });
             },
             .expected_literal_expression => {
-                std.log.debug("Expected Literal Expression at {d}:{d}", .{ error_report.position.line, error_report.position.pos });
+                std.log.debug("{s}:{d}:{d}: Expected Literal Expression", .{ file_name, error_report.position.line, error_report.position.pos });
             },
             .invalid_character => {
-                std.log.debug("Invalid Character at {d}:{d}", .{ error_report.position.line, error_report.position.pos });
+                std.log.debug("{s}:{d}:{d}: Invalid Character", .{ file_name, error_report.position.line, error_report.position.pos });
             },
             .unexpected_node => {
-                std.log.debug("Unexpected Node at {d}:{d}, expect {s}, found {any}", .{ error_report.position.line, error_report.position.pos, error_report.data.unexpected_node.expected, error_report.data.unexpected_node.found });
+                std.log.debug("{s}:{d}:{d}: Unexpected Node, expect {s}, found {any}", .{ file_name, error_report.position.line, error_report.position.pos, error_report.data.unexpected_node.expected, error_report.data.unexpected_node.found });
             },
         }
     }
@@ -178,9 +178,9 @@ pub const ErrorReportArray = struct {
         });
     }
 
-    pub fn report(error_report_array: *const ErrorReportArray, source: [:0]const u8) void {
+    pub fn report(error_report_array: *const ErrorReportArray, source: [:0]const u8, file_name: []const u8) void {
         for (error_report_array.raw()) |error_report| {
-            ErrorReport.report(error_report, source);
+            ErrorReport.report(error_report, source, file_name);
         }
     }
 };

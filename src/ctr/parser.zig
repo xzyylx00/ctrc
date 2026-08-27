@@ -24,6 +24,8 @@ const Token = Lexer.Token;
 const ASTNode = @import("ast.zig").ASTNode;
 const ASTNodeArray = @import("ast.zig").ASTNodeArray;
 
+const enable_trace = false;
+
 fn releaseASTNode(ast_node_array: *ASTNodeArray, node_index: usize) void {
     const ast_node = ast_node_array.get(node_index) catch unreachable;
 
@@ -33,8 +35,13 @@ fn releaseASTNode(ast_node_array: *ASTNodeArray, node_index: usize) void {
 }
 
 pub fn parseRoot(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Root at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Root at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Root at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Root at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
+
     const ast_node_index = try ast_node_array.alloc();
 
     const containor_node_index = try parseBlockExpressionContent(ast_node_array, lexer, error_report_array);
@@ -75,8 +82,12 @@ pub fn parseRoot(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report
 }
 
 fn parseBlockExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Block Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Block Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Block Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Block Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
     const lbrace_token = lexer.next();
     if (lbrace_token.kind == .l_brace) {
         const context_node = try parseBlockExpressionContent(ast_node_array, lexer, error_report_array);
@@ -101,8 +112,12 @@ fn parseBlockExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error
 }
 
 fn parseBlockExpressionContent(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing BlockExpressionContent at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving BlockExpressionContent at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Block Expression Content at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Block Expression Content at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
     const ast_node_index = try ast_node_array.alloc();
 
     var block_expression_node = ASTNode{
@@ -179,8 +194,12 @@ fn parseBlockExpressionContent(ast_node_array: *ASTNodeArray, lexer: *TokenArray
 }
 
 fn parseStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Statement at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
     const statement_node_index = try ast_node_array.alloc();
     const previous_lexer = lexer.*;
 
@@ -289,8 +308,12 @@ fn parseStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_repor
 }
 
 fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Assignment Statement at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Assignment Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Assignment Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Assignment Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
     const assignment_node_index = try ast_node_array.alloc();
 
     var first_target_node_index: ?usize = null;
@@ -437,8 +460,12 @@ fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, e
 }
 
 fn parseAssignmentTarget(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Assignment Target at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Assignment Target at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Assignment Target at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Assignment Target at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
     const assignment_target_node_index = try ast_node_array.alloc();
 
     const peek_token = lexer.peek();
@@ -527,8 +554,12 @@ fn parseAssignmentTarget(ast_node_array: *ASTNodeArray, lexer: *TokenArray, erro
 }
 
 fn parseCallStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Call Statement at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Call Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Call Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Call Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
     const call_statement_node_index = try ast_node_array.alloc();
 
     if (try parseCallExpression(ast_node_array, lexer, error_report_array)) |call_expression_node_index| {
@@ -582,8 +613,12 @@ fn parseCallStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_r
 }
 
 fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Call Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Call Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Call Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Call Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
     const call_expression_node_index = try ast_node_array.alloc();
 
     if (try parseLiteralExpression(ast_node_array, lexer, error_report_array)) |target_node_index| {
@@ -734,8 +769,12 @@ fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_
 }
 
 fn parseCallParameter(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Call Parameter at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Call Parameter at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Call Parameter at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Call Parameter at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
     const call_parameter_node_index = try ast_node_array.alloc();
 
     if (try parseSingleExpression(ast_node_array, lexer, error_report_array)) |expression_node_index| {
@@ -757,8 +796,12 @@ fn parseCallParameter(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_r
 }
 
 fn parseExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
     if (try parseMultipleExpression(ast_node_array, lexer, error_report_array)) |multiple_expression_node_index| {
         const multiple_expression_node = ast_node_array.get(multiple_expression_node_index) catch unreachable;
 
@@ -775,8 +818,12 @@ fn parseExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_repo
 }
 
 fn parseSingleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Single Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Single Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Single Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Single Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
     const expression_node_index = try ast_node_array.alloc();
     const previous_lexer = lexer.*;
 
@@ -965,8 +1012,12 @@ fn parseSingleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, erro
 }
 
 fn parseMultipleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Multiple Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Multiple Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Multiple Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Multiple Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
     // XXX Need error report
     var first_expression_node_index: ?usize = null;
     var current_expression_node_index: ?usize = null;
@@ -1025,8 +1076,12 @@ fn parseMultipleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, er
 
 fn parseLiteralExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
     _ = error_report_array;
-    std.log.debug("Parsing Literal Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Literal Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Literal Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Literal Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
     const literal_expression_node_index = try ast_node_array.alloc();
 
     const peek_token = lexer.peek();
@@ -1070,8 +1125,12 @@ fn parseLiteralExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, err
 }
 
 fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Type Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Type Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Type Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Type Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
     const type_expression_node_index = try ast_node_array.alloc();
 
     var peek_token = lexer.peek();
@@ -1314,8 +1373,12 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_
 }
 
 fn parseTypeEntry(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Type Entry at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Type Entry at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Type Entry at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Type Entry at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
     const type_entry_node_index = try ast_node_array.alloc();
 
     var name_token: Token = undefined;
@@ -1403,8 +1466,12 @@ fn parseTypeEntry(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_repor
 }
 
 fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Function Parameter at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Function Parameter at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Function Parameter at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Function Parameter at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
     const function_parameter_node_index = try ast_node_array.alloc();
 
     var peek_token = lexer.peek();
@@ -1515,8 +1582,12 @@ fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *TokenArray, err
 }
 
 fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Function Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Function Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Function Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Function Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
     const function_expression_node_index = try ast_node_array.alloc();
 
     var peek_token = lexer.peek();
@@ -1706,8 +1777,12 @@ fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, er
 }
 
 fn parseFunctionAttribute(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Function Attribute at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Function Attribute at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Function Attribute at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Function Attribute at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
     const function_attribute_node_index = try ast_node_array.alloc();
 
     var peek_token = lexer.peek();
@@ -1778,8 +1853,12 @@ fn parseFunctionAttribute(ast_node_array: *ASTNodeArray, lexer: *TokenArray, err
 }
 
 fn parseLabelExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Label Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Label Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Label Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Label Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
     const label_expression_node_index = try ast_node_array.alloc();
 
     var label_expression: usize = undefined;
@@ -1827,8 +1906,12 @@ fn parseLabelExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error
 }
 
 fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Match Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Match Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Match Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Match Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
     const match_expression_node_index = try ast_node_array.alloc();
 
     var peek_token = lexer.peek();
@@ -2008,8 +2091,12 @@ fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error
 }
 
 fn parseMatchCase(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Match Case at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Match Case at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Match Case at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Match Case at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
     const match_case_node_index = try ast_node_array.alloc();
 
     const peek_token = lexer.peek();
@@ -2061,8 +2148,12 @@ fn parseMatchCase(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_repor
 }
 
 fn parseAttributedExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Attributed Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Attribute Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Attributed Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Attributed Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
     const attributed_expression_node_index = try ast_node_array.alloc();
 
     if (lexer.peek()) |peek_token| {
@@ -2109,8 +2200,12 @@ fn parseAttributedExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, 
 }
 
 fn parseBreakStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Break Statement at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Break Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Break Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Break Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
     const break_statement_node_index = try ast_node_array.alloc();
 
     if (lexer.peek()) |peek_token| {
@@ -2198,8 +2293,12 @@ fn parseBreakStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_
 }
 
 fn parseContinueStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Continue Statement at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Continue Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Continue Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Continue Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
     const continue_statement_node_index = try ast_node_array.alloc();
 
     if (lexer.peek()) |peek_token| {
@@ -2287,8 +2386,12 @@ fn parseContinueStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, err
 }
 
 fn parseCommentedStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Commented Statement at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Commented Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Commented Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Commented Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
 
     const commented_statement_node_index = try ast_node_array.alloc();
     // Release
@@ -2338,8 +2441,12 @@ fn parseCommentedStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, er
 }
 
 fn parseCommentedSingleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    std.log.debug("Parsing Commented Single Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    defer std.log.debug("Leaving Commented Single Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    if (enable_trace) {
+        std.log.debug("Parsing Commented Single Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    }
+    defer if (enable_trace) {
+        std.log.debug("Leaving Commemted Single Expression at {any}", .{Module.Position.toPosition(lexer.current())});
+    };
 
     const commented_single_expression_node_index = try ast_node_array.alloc();
     // Release

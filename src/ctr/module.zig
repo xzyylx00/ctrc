@@ -148,9 +148,9 @@ pub fn parse(module: *Module) error{OutOfCapacity}!void {
     }
 }
 
-pub fn report(module: *Module) void {
+pub fn report(module: *Module, file_name: []const u8) void {
     if (module.source) |source| {
-        module.error_report_array.report(source);
+        module.error_report_array.report(source, file_name);
     }
 }
 

@@ -184,7 +184,7 @@ fn formatFunctionExpression(ast_node_array: *const ast.ASTNodeArray, source: []c
         const current_function_parameter_node = try ast_node_array.get(_current_function_parameter);
         current_function_parameter = current_function_parameter_node.data.function_parameter.next;
     }
-    _ = try writer.write(") ");
+    _ = try writer.write(")");
 
     var current_attribute = root_node.data.function_expression.attribute;
     while (current_attribute) |_current_attribute| {
@@ -216,8 +216,8 @@ fn formatFunctionParameter(ast_node_array: *const ast.ASTNodeArray, source: []co
 fn formatFunctionAttribute(ast_node_array: *const ast.ASTNodeArray, source: []const u8, root_node_index: usize, writer: *std.Io.Writer, space: u32) anyerror!void {
     const root_node = try ast_node_array.get(root_node_index);
     _ = try writer.write(switch (root_node.data.function_attribute.kind) {
-        .external => "external(",
-        .internal => "internal(",
+        .external => " external(",
+        .internal => " internal(",
     });
     if (root_node.data.function_attribute.expression) |expression| {
         try formatSingleExpression(ast_node_array, source, expression, writer, space);
