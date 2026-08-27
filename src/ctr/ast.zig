@@ -720,31 +720,48 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
             return root_node_index;
         },
         .expression => {
+            const getExpression = struct {
+                pub fn getExpression(index: usize, _ast_node_array: *const ASTNodeArray, _error_report_array: *_error.ErrorReportArray) error{ OutOfRange, OutOfCapacity }!struct { usize, ?ASTNode } {
+                    const node = try _ast_node_array.get(index);
+                    return switch (node.kind) {
+                        .call_expression,
+                        .type_expression,
+                        .block_expression,
+                        .label_expression,
+                        .match_expression,
+                        .literal_expression,
+                        .function_expression,
+                        .attributed_expression,
+                        => .{ index, node },
+                        .expression => return getExpression(node.data.expression.expression, _ast_node_array, _error_report_array),
+                        else => {
+                            try _error_report_array.addUnexpectedNodeReport("expression", node.kind, node.position);
+                            return .{ 0, null };
+                        },
+                    };
+                }
+            }.getExpression;
             const expression = try simplify(ast_node_array, error_report_array, root_node.data.expression.expression);
             if (expression == null) {
                 return null;
             }
-            const expression_node = try ast_node_array.get(expression.?);
-            const kind: ASTNode.Expression.ExpressionKind = switch (expression_node.kind) {
-                .call_expression => .call,
-                .type_expression => .type,
-                .block_expression => .block,
-                .label_expression => .label,
-                .match_expression => .match,
-                .literal_expression => .literal,
-                .function_expression => .function,
-                .attributed_expression => .attributed,
-                else => {
-                    try error_report_array.addUnexpectedNodeReport("Expression", expression_node.kind, root_node.position);
-                    return null;
-                },
-            };
+            const expression_node = try getExpression(expression.?, ast_node_array, error_report_array);
             const new_node = ASTNode{
                 .kind = .expression,
                 .data = .{
                     .expression = .{
-                        .expression = expression.?,
-                        .kind = kind,
+                        .expression = expression_node.@"0",
+                        .kind = switch (expression_node.@"1".?.kind) {
+                            .call_expression => .call,
+                            .type_expression => .type,
+                            .block_expression => .block,
+                            .label_expression => .label,
+                            .match_expression => .match,
+                            .literal_expression => .literal,
+                            .function_expression => .function,
+                            .attributed_expression => .attributed,
+                            else => unreachable,
+                        },
                     },
                 },
                 .position = root_node.position,
@@ -927,9 +944,6 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
                 return null;
             }
             const next = try simplify(ast_node_array, error_report_array, root_node.data.statement.next);
-            if (statement == null) {
-                return null;
-            }
             const statement_node = try getStatement(statement.?, ast_node_array, error_report_array);
 
             const new_node = ASTNode{

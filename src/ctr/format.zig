@@ -320,6 +320,5 @@ fn formatCommentedSingleExpression(ast_node_array: *const ast.ASTNodeArray, sour
     try printSpace(space, writer);
     if (root_node.data.comment.next) |next| {
         try formatSingleExpression(ast_node_array, source, next, writer, space);
-        try printSpace(space, writer);
     }
 }
