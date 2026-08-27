@@ -1,17 +1,25 @@
 in std = #import("std");
 in module = #import("module.ctr");
 
+#!
+
 in myAlloc = module.myAlloc;
 _ = myAlloc;
+
 #! in private_var = module.private_assignment;
 #! Invisible
+#!
 
 in typee = type("Entry") {
     aaA,
     AAAA,
 };
 
+#!
+
 in fib = function(in num: uint64, ) external("c");
+
+#!
 
 in main = function(){c: match(1) {
     case _: 
@@ -28,4 +36,7 @@ in main = function(){c: match(1) {
     }
     }
 };
+#!
+
+
 main

@@ -17,6 +17,3 @@ type ("struct") {
     main: main,
     Helper: Helper,
 }
-
-}
-

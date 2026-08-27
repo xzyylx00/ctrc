@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-
-
 set -euo pipefail
 
 DRY_RUN=0
