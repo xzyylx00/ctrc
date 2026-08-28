@@ -1,12 +1,7 @@
 .{
     .name = .ctrc,
     .version = "0.0.1",
-    .dependencies = .{
-        .aslibrary = .{
-            .url = "git+https://git.0918273.xyz/xzyylx00/aslibrary.git#30dc56c7e7016f8363233347a2232974a897adf3",
-            .hash = "aslibrary-0.0.1-eibbq1cCAgC-ccpBb7Gy4QsbCiduHRQm1Z0B2q50q-U_",
-        },
-    },
+    .dependencies = .{},
     .minimum_zig_version = "0.16.0",
     .paths = .{""},
     .fingerprint = 0x929d6ceb4bea06b0,

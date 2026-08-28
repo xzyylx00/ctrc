@@ -10,13 +10,6 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/ctrc.zig"),
     });
 
-    const aslibrary = b.dependency("aslibrary", .{
-        .target = target,
-        .optimize = optimize,
-    });
-
-    module.addImport("aslib", aslibrary.module("aslibrary"));
-
     const executable = b.addExecutable(.{
         .name = "ctrc",
         .root_module = module,

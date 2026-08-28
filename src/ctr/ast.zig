@@ -16,8 +16,8 @@
 
 const Module = @import("module.zig");
 const _error = @import("error.zig");
-const aslib = @import("aslib");
 const std = @import("std");
+const StableIndexArrayUnmanaged = @import("lib/array.zig").StableIndexArrayUnmanaged;
 
 pub const ASTNode = struct {
     pub const Kind = enum {
@@ -264,7 +264,7 @@ pub const ASTNode = struct {
     position: Module.Position,
 };
 
-pub const ASTNodeArray = aslib.array.StableIndexArrayUnmanaged(ASTNode);
+pub const ASTNodeArray = StableIndexArrayUnmanaged(ASTNode);
 
 pub fn dump(ast_node_array: *ASTNodeArray, source: [:0]const u8, root_node_index: usize, space: u32) error{OutOfRange}!void {
     const indent = 2;

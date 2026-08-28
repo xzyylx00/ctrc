@@ -14,7 +14,6 @@
 // You should have received a copy of the Lesser GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-const aslib = @import("aslib");
 const std = @import("std");
 const Lexer = @import("lexer.zig");
 const Module = @import("module.zig");

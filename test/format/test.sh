@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-tmp_dir = $(mktemp -d);
-
 testAndCheck() {
         cp "$1" "$1.result" $tmp_dir
         cd $tmp_dir

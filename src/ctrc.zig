@@ -1,9 +1,9 @@
 const std = @import("std");
-const aslib = @import("aslib");
+const logFn = @import("ctr/lib/log.zig").logFn;
 const ctr = @import("ctr/ctr.zig");
 
 pub const std_options: std.Options = .{
-    .logFn = aslib.log.logFn,
+    .logFn = logFn,
 };
 
 const test_file = @embedFile("test.ctr");

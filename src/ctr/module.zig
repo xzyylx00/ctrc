@@ -15,7 +15,6 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 const std = @import("std");
-const aslib = @import("aslib");
 const _format = @import("format.zig");
 const ast = @import("ast.zig");
 const Lexer = @import("lexer.zig");
