@@ -81,6 +81,7 @@ pub fn main(init: std.process.Init) !u8 {
                         continue;
                     };
                     module.report(arg);
+                    try ctr.ast.dump(&module.ast_node_array, module.source.?, module.ast_node_root.?, 0);
                     var source_writer = source_file.writer(init.io, &.{});
                     module.format(&source_writer.interface) catch |err| {
                         std.debug.print("Error {s} occurred while writing formatted file {s}", .{ @errorName(err), arg });

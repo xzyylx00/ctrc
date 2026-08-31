@@ -39,7 +39,10 @@ fn formatLabelExpression(ast_node_array: *const ast.ASTNodeArray, source: []cons
 
 fn formatBlockExpression(ast_node_array: *const ast.ASTNodeArray, source: []const u8, root_node_index: usize, writer: *std.Io.Writer, space: u32) anyerror!void {
     _ = try writer.write("{\n");
-    try printSpace(space + indent, writer);
+    const root_node = try ast_node_array.get(root_node_index);
+    if (root_node.data.block_expression.statement != null) {
+        try printSpace(space + indent, writer);
+    }
     try formatBlockExpressionContent(ast_node_array, source, root_node_index, writer, space + indent);
     try printSpace(space, writer);
     _ = try writer.write("}");
@@ -91,10 +94,9 @@ fn formatCommentedStatement(ast_node_array: *const ast.ASTNodeArray, source: []c
     const root_node = try ast_node_array.get(root_node_index);
     _ = try writer.write(source[root_node.data.comment.range.start..root_node.data.comment.range.end]);
     _ = try writer.write("\n");
-    try printSpace(space, writer);
     if (root_node.data.comment.next) |next| {
-        try formatStatement(ast_node_array, source, next, writer, space);
         try printSpace(space, writer);
+        try formatStatement(ast_node_array, source, next, writer, space);
     }
 }
 
