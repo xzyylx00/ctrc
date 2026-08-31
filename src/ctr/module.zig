@@ -162,3 +162,14 @@ pub fn format(module: *const Module, writer: *std.Io.Writer) !void {
 pub fn simplify(module: *Module) error{ OutOfRange, OutOfCapacity }!void {
     module.ast_node_root = try ast.simplify(&module.ast_node_array, &module.error_report_array, module.ast_node_root);
 }
+
+pub fn errorCount(module: *const Module) usize {
+    return module.error_report_array.raw().len;
+}
+
+// pub const Compiler = struct {
+//     modules: std.StringHashMap(Module),
+//     allocator: std.mem.Allocator,
+
+//     pub fn init(allocator: std.mem.Allocator) !Compiler {}
+// };

@@ -56,7 +56,9 @@ fn formatBlockExpressionContent(ast_node_array: *const ast.ASTNodeArray, source:
             try printSpace(space, writer);
         }
     }
-
+    if (indent != 0) {
+        try printSpace(space, writer);
+    }
     try formatExpression(ast_node_array, source, root_node.data.block_expression.expression, writer, space);
     _ = try writer.write("\n");
 }
@@ -107,7 +109,6 @@ fn formatAssignmentStatement(ast_node_array: *const ast.ASTNodeArray, source: []
     _ = try writer.write(" = ");
     try formatExpression(ast_node_array, source, root_node.data.assignment_statement.expression, writer, space);
     _ = try writer.write(";\n");
-    try printSpace(space, writer);
 }
 
 fn formatExpression(ast_node_array: *const ast.ASTNodeArray, source: []const u8, root_node_index: usize, writer: *std.Io.Writer, space: u32) anyerror!void {
@@ -151,12 +152,14 @@ fn formatTypeExpression(ast_node_array: *const ast.ASTNodeArray, source: []const
     _ = try writer.write("type (");
     try formatExpression(ast_node_array, source, root_node.data.type_expression.kind, writer, space + indent);
     _ = try writer.write(") {\n");
-    try printSpace(space + indent, writer);
     var current_type_entry = root_node.data.type_expression.entry;
-    while (current_type_entry) |_current_type_entry| {
-        try formatTypeEntry(ast_node_array, source, _current_type_entry, writer, space + indent);
-        const current_type_entry_node = try ast_node_array.get(_current_type_entry);
-        current_type_entry = current_type_entry_node.data.type_entry.next;
+    if (current_type_entry != null) {
+        try printSpace(space + indent, writer);
+        while (current_type_entry) |_current_type_entry| {
+            try formatTypeEntry(ast_node_array, source, _current_type_entry, writer, space + indent);
+            const current_type_entry_node = try ast_node_array.get(_current_type_entry);
+            current_type_entry = current_type_entry_node.data.type_entry.next;
+        }
     }
     try printSpace(space, writer);
     _ = try writer.write("}");
@@ -255,7 +258,6 @@ fn formatBreakStatement(ast_node_array: *const ast.ASTNodeArray, source: []const
     _ = try writer.write(" ");
     try formatExpression(ast_node_array, source, root_node.data.break_statement.expression, writer, space + indent);
     _ = try writer.write(";\n");
-    try printSpace(space, writer);
 }
 
 fn formatContinueStatement(ast_node_array: *const ast.ASTNodeArray, source: []const u8, root_node_index: usize, writer: *std.Io.Writer, space: u32) anyerror!void {
@@ -265,7 +267,6 @@ fn formatContinueStatement(ast_node_array: *const ast.ASTNodeArray, source: []co
     _ = try writer.write(" ");
     try formatExpression(ast_node_array, source, root_node.data.continue_statement.expression, writer, space + indent);
     _ = try writer.write(";\n");
-    try printSpace(space, writer);
 }
 
 fn formatLiteralExpression(ast_node_array: *const ast.ASTNodeArray, source: []const u8, root_node_index: usize, writer: *std.Io.Writer, space: u32) anyerror!void {

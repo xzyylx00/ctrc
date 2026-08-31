@@ -86,6 +86,9 @@ pub fn main(init: std.process.Init) !u8 {
                         std.debug.print("Error {s} occurred while writing formatted file {s}", .{ @errorName(err), arg });
                         continue;
                     };
+                    if (module.errorCount() == 0) {
+                        try source_writer.end();
+                    }
                     std.debug.print("{s}", .{arg});
                 },
                 .help => {},
