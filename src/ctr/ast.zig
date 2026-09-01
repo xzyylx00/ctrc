@@ -374,10 +374,6 @@ pub fn dump(ast_node_array: *ASTNodeArray, source: [:0]const u8, root_node_index
                 current_parameter = current_parameter_node.data.function_parameter.next;
             }
 
-            if (root_node.data.function_expression.expression) |expression| {
-                try dump(ast_node_array, source, expression, space + indent);
-            }
-
             var current_attribute = root_node.data.function_expression.attribute;
             while (current_attribute) |_current_attribute| {
                 const current_attribute_node = try ast_node_array.get(_current_attribute);

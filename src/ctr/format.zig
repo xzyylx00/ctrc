@@ -59,7 +59,7 @@ fn formatBlockExpressionContent(ast_node_array: *const ast.ASTNodeArray, source:
             try printSpace(space, writer);
         }
     }
-    if (indent != 0) {
+    if (space != 0) {
         try printSpace(space, writer);
     }
     try formatExpression(ast_node_array, source, root_node.data.block_expression.expression, writer, space);
