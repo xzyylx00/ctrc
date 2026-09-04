@@ -529,7 +529,428 @@ pub fn dump(ast_node_array: *ASTNodeArray, source: [:0]const u8, root_node_index
     }
 }
 
-pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.ErrorReportArray, root_node_index: ?usize) error{ OutOfRange, OutOfCapacity }!?usize {
+fn decodedChar(source: [:0]u8, node: ASTNode, error_report_array: *_error.ErrorReportArray) error{ OutOfRange, OutOfCapacity }!?ASTNode {
+    var from: usize = node.data.literal_expression.position.start + 1;
+    var index = from;
+    var write = from;
+
+    const State = enum {
+        start,
+        escaped,
+        escaped_hex,
+        escaped_hex2,
+    };
+
+    ct: switch (State.start) {
+        .start => {
+            switch (source[index]) {
+                0 => {
+                    try error_report_array.addInvalidCharacter(.{
+                        .line = node.position.line,
+                        .pos = node.position.pos + (index - node.data.literal_expression.position.start),
+                    });
+                    return null;
+                },
+                '\\' => {
+                    from = index;
+                    index += 1;
+                    continue :ct .escaped;
+                },
+                '\'' => {
+                    try error_report_array.addExpectedCharacter(.{
+                        .line = node.position.line,
+                        .pos = node.position.pos + (index - node.data.literal_expression.position.start),
+                    });
+                    return null;
+                },
+                else => {
+                    return node;
+                },
+            }
+        },
+        .escaped => {
+            switch (source[index]) {
+                0 => {
+                    try error_report_array.addInvalidCharacter(.{
+                        .line = node.position.line,
+                        .pos = node.position.pos + (index - node.data.literal_expression.position.start),
+                    });
+                    return null;
+                },
+                't' => {
+                    source[write] = '\t';
+                    index += 1;
+                    write += 1;
+                    if (source[index] == 0 or source[index] != '\'') {
+                        try error_report_array.addInvalidCharacter(.{
+                            .line = node.position.line,
+                            .pos = node.position.pos + (index - node.data.literal_expression.position.start),
+                        });
+                        return null;
+                    } else {
+                        source[write] = '\'';
+                        write += 1;
+                    }
+                    return ASTNode{
+                        .kind = .literal_expression,
+                        .position = node.position,
+                        .data = .{
+                            .literal_expression = .{
+                                .kind = node.data.literal_expression.kind,
+                                .position = .{
+                                    .start = node.data.literal_expression.position.start,
+                                    .end = write,
+                                },
+                            },
+                        },
+                    };
+                },
+                'n' => {
+                    source[write] = '\n';
+                    index += 1;
+                    write += 1;
+                    if (source[index] == 0 or source[index] != '\'') {
+                        try error_report_array.addInvalidCharacter(.{
+                            .line = node.position.line,
+                            .pos = node.position.pos + (index - node.data.literal_expression.position.start),
+                        });
+                        return null;
+                    } else {
+                        source[write] = '\'';
+                        write += 1;
+                    }
+                    return ASTNode{
+                        .kind = .literal_expression,
+                        .position = node.position,
+                        .data = .{
+                            .literal_expression = .{
+                                .kind = node.data.literal_expression.kind,
+                                .position = .{
+                                    .start = node.data.literal_expression.position.start,
+                                    .end = write,
+                                },
+                            },
+                        },
+                    };
+                },
+                'r' => {
+                    source[write] = '\r';
+                    index += 1;
+                    write += 1;
+                    if (source[index] == 0 or source[index] != '\'') {
+                        try error_report_array.addInvalidCharacter(.{
+                            .line = node.position.line,
+                            .pos = node.position.pos + (index - node.data.literal_expression.position.start),
+                        });
+                        return null;
+                    } else {
+                        source[write] = '\'';
+                        write += 1;
+                    }
+                    return ASTNode{
+                        .kind = .literal_expression,
+                        .position = node.position,
+                        .data = .{
+                            .literal_expression = .{
+                                .kind = node.data.literal_expression.kind,
+                                .position = .{
+                                    .start = node.data.literal_expression.position.start,
+                                    .end = write,
+                                },
+                            },
+                        },
+                    };
+                },
+                '\'' => {
+                    source[write] = '\'';
+                    index += 1;
+                    write += 1;
+                    if (source[index] == 0 or source[index] != '\'') {
+                        try error_report_array.addInvalidCharacter(.{
+                            .line = node.position.line,
+                            .pos = node.position.pos + (index - node.data.literal_expression.position.start),
+                        });
+                        return null;
+                    } else {
+                        source[write] = '\'';
+                        write += 1;
+                    }
+                    return ASTNode{
+                        .kind = .literal_expression,
+                        .position = node.position,
+                        .data = .{
+                            .literal_expression = .{
+                                .kind = node.data.literal_expression.kind,
+                                .position = .{
+                                    .start = node.data.literal_expression.position.start,
+                                    .end = write,
+                                },
+                            },
+                        },
+                    };
+                },
+                '"' => {
+                    source[write] = '"';
+                    index += 1;
+                    write += 1;
+                    if (source[index] == 0 or source[index] != '\'') {
+                        try error_report_array.addInvalidCharacter(.{
+                            .line = node.position.line,
+                            .pos = node.position.pos + (index - node.data.literal_expression.position.start),
+                        });
+                        return null;
+                    } else {
+                        source[write] = '\'';
+                        write += 1;
+                    }
+                    return ASTNode{
+                        .kind = .literal_expression,
+                        .position = node.position,
+                        .data = .{
+                            .literal_expression = .{
+                                .kind = node.data.literal_expression.kind,
+                                .position = .{
+                                    .start = node.data.literal_expression.position.start,
+                                    .end = write,
+                                },
+                            },
+                        },
+                    };
+                },
+                'x' => {
+                    index += 1;
+                    from = index;
+                    continue :ct .escaped_hex;
+                },
+                else => {
+                    try error_report_array.addInvalidCharacter(.{
+                        .line = node.position.line,
+                        .pos = node.position.pos + (index - node.data.literal_expression.position.start),
+                    });
+                    return null;
+                },
+            }
+        },
+        .escaped_hex => {
+            if (source[index] == 0) {
+                try error_report_array.addInvalidCharacter(.{
+                    .line = node.position.line,
+                    .pos = node.position.pos + (index - node.data.literal_expression.position.start),
+                });
+                return null;
+            } else if (std.ascii.isHex(source[index])) {
+                index += 1;
+                continue :ct .escaped_hex2;
+            } else if (source[index] == '\'') {
+                try error_report_array.addExpectedCharacter(.{
+                    .line = node.position.line,
+                    .pos = node.position.pos + (index - node.data.literal_expression.position.start),
+                });
+                return null;
+            } else {
+                try error_report_array.addInvalidCharacter(.{
+                    .line = node.position.line,
+                    .pos = node.position.pos + (index - node.data.literal_expression.position.start),
+                });
+                return null;
+            }
+        },
+        .escaped_hex2 => {
+            if (source[index] == 0) {
+                try error_report_array.addInvalidCharacter(.{
+                    .line = node.position.line,
+                    .pos = node.position.pos + (index - node.data.literal_expression.position.start),
+                });
+                return null;
+            } else if (std.ascii.isHex(source[index])) {
+                index += 1;
+                if (source[index] == 0 or source[index] != '\'') {
+                    try error_report_array.addInvalidCharacter(.{
+                        .line = node.position.line,
+                        .pos = node.position.pos + (index - node.data.literal_expression.position.start),
+                    });
+                    return null;
+                }
+                var buf: [2]u8 = undefined;
+                const result = std.fmt.hexToBytes(&buf, source[from..index]) catch unreachable;
+                source[write] = result[0];
+                write += 1;
+                source[write] = '\'';
+                write += 1;
+                return ASTNode{
+                    .kind = .literal_expression,
+                    .position = node.position,
+                    .data = .{
+                        .literal_expression = .{
+                            .kind = node.data.literal_expression.kind,
+                            .position = .{
+                                .start = node.data.literal_expression.position.start,
+                                .end = write,
+                            },
+                        },
+                    },
+                };
+            } else {
+                try error_report_array.addInvalidCharacter(.{
+                    .line = node.position.line,
+                    .pos = node.position.pos + (index - node.data.literal_expression.position.start),
+                });
+                return null;
+            }
+        },
+    }
+}
+
+fn decodedString(source: [:0]u8, node: ASTNode, error_report_array: *_error.ErrorReportArray) error{ OutOfRange, OutOfCapacity }!?ASTNode {
+    var from: usize = node.data.literal_expression.position.start + 1;
+    if (node.data.literal_expression.kind == .identifier) {
+        from += 1;
+    }
+    var index = from;
+    var write = from;
+
+    const State = enum {
+        start,
+        escaped,
+        escaped_hex,
+        escaped_hex2,
+    };
+
+    ct: switch (State.start) {
+        .start => {
+            switch (source[index]) {
+                0 => {
+                    try error_report_array.addInvalidCharacter(.{
+                        .line = node.position.line,
+                        .pos = node.position.pos + (index - node.data.literal_expression.position.start),
+                    });
+                    return null;
+                },
+                '\\' => {
+                    from = index;
+                    index += 1;
+                    continue :ct .escaped;
+                },
+                '"' => {
+                    source[write] = '"';
+                    write += 1;
+                    return ASTNode{
+                        .kind = .literal_expression,
+                        .position = node.position,
+                        .data = .{
+                            .literal_expression = .{
+                                .kind = node.data.literal_expression.kind,
+                                .position = .{
+                                    .start = node.data.literal_expression.position.start,
+                                    .end = write,
+                                },
+                            },
+                        },
+                    };
+                },
+                else => {
+                    index += 1;
+                    write += 1;
+                    continue :ct .start;
+                },
+            }
+        },
+        .escaped => {
+            switch (source[index]) {
+                0 => {
+                    try error_report_array.addInvalidCharacter(.{
+                        .line = node.position.line,
+                        .pos = node.position.pos + (index - node.data.literal_expression.position.start),
+                    });
+                    return null;
+                },
+                't' => {
+                    source[write] = '\t';
+                    index += 1;
+                    write += 1;
+                    continue :ct .start;
+                },
+                'n' => {
+                    source[write] = '\n';
+                    index += 1;
+                    write += 1;
+                    continue :ct .start;
+                },
+                'r' => {
+                    source[write] = '\r';
+                    index += 1;
+                    write += 1;
+                    continue :ct .start;
+                },
+                '\'' => {
+                    source[write] = '\'';
+                    index += 1;
+                    write += 1;
+                    continue :ct .start;
+                },
+                '"' => {
+                    source[write] = '"';
+                    index += 1;
+                    write += 1;
+                    continue :ct .start;
+                },
+                'x' => {
+                    index += 1;
+                    continue :ct .escaped_hex;
+                },
+                else => {
+                    try error_report_array.addInvalidCharacter(.{
+                        .line = node.position.line,
+                        .pos = node.position.pos + (index - node.data.literal_expression.position.start),
+                    });
+                    return null;
+                },
+            }
+        },
+        .escaped_hex => {
+            if (source[index] == 0) {
+                try error_report_array.addInvalidCharacter(.{
+                    .line = node.position.line,
+                    .pos = node.position.pos + (index - node.data.literal_expression.position.start),
+                });
+                return null;
+            } else if (std.ascii.isHex(source[index])) {
+                index += 1;
+                continue :ct .escaped_hex2;
+            } else {
+                try error_report_array.addInvalidCharacter(.{
+                    .line = node.position.line,
+                    .pos = node.position.pos + (index - node.data.literal_expression.position.start),
+                });
+                return null;
+            }
+        },
+        .escaped_hex2 => {
+            if (source[index] == 0) {
+                try error_report_array.addInvalidCharacter(.{
+                    .line = node.position.line,
+                    .pos = node.position.pos + (index - node.data.literal_expression.position.start),
+                });
+                return null;
+            } else if (std.ascii.isHex(source[index])) {
+                index += 1;
+                var buf: [2]u8 = undefined;
+                const result = std.fmt.hexToBytes(&buf, source[from..index]) catch unreachable;
+                source[write] = result[0];
+                write += 1;
+                continue :ct .start;
+            } else {
+                try error_report_array.addInvalidCharacter(.{
+                    .line = node.position.line,
+                    .pos = node.position.pos + (index - node.data.literal_expression.position.start),
+                });
+                return null;
+            }
+        },
+    }
+}
+
+pub fn simplify(source: [:0]u8, ast_node_array: *ASTNodeArray, error_report_array: *_error.ErrorReportArray, root_node_index: ?usize) error{ OutOfRange, OutOfCapacity }!?usize {
     if (root_node_index == null) {
         return null;
     }
@@ -537,8 +958,8 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
     var invalid = false;
     switch (root_node.kind) {
         .assignment_statement => {
-            const expression = try simplify(ast_node_array, error_report_array, root_node.data.assignment_statement.expression);
-            const target = try simplify(ast_node_array, error_report_array, root_node.data.assignment_statement.target);
+            const expression = try simplify(source, ast_node_array, error_report_array, root_node.data.assignment_statement.expression);
+            const target = try simplify(source, ast_node_array, error_report_array, root_node.data.assignment_statement.target);
 
             if (expression == null) {
                 try error_report_array.addExpectedLiteralExpressionReport(root_node.position);
@@ -571,7 +992,7 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
                     .assignment_target = .{
                         .access_attribute = root_node.data.assignment_target.access_attribute,
                         .name = root_node.data.assignment_target.name,
-                        .next = try simplify(ast_node_array, error_report_array, root_node.data.assignment_target.next),
+                        .next = try simplify(source, ast_node_array, error_report_array, root_node.data.assignment_target.next),
                     },
                 },
                 .kind = .assignment_target,
@@ -581,7 +1002,7 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
             return root_node_index;
         },
         .attributed_expression => {
-            const expression = try simplify(ast_node_array, error_report_array, root_node.data.attributed_expression.expression);
+            const expression = try simplify(source, ast_node_array, error_report_array, root_node.data.attributed_expression.expression);
             if (expression == null) {
                 try error_report_array.addExpectedExpressionReport(root_node.position);
                 return null;
@@ -600,7 +1021,7 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
             return root_node_index;
         },
         .block_expression => {
-            const expression = try simplify(ast_node_array, error_report_array, root_node.data.block_expression.expression);
+            const expression = try simplify(source, ast_node_array, error_report_array, root_node.data.block_expression.expression);
             if (expression == null) {
                 try error_report_array.addExpectedExpressionReport(root_node.position);
                 return null;
@@ -610,7 +1031,7 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
                 .data = .{
                     .block_expression = .{
                         .expression = expression.?,
-                        .statement = try simplify(ast_node_array, error_report_array, root_node.data.block_expression.statement),
+                        .statement = try simplify(source, ast_node_array, error_report_array, root_node.data.block_expression.statement),
                     },
                 },
                 .position = root_node.position,
@@ -619,7 +1040,7 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
             return root_node_index;
         },
         .break_statement => {
-            const expression = try simplify(ast_node_array, error_report_array, root_node.data.break_statement.expression);
+            const expression = try simplify(source, ast_node_array, error_report_array, root_node.data.break_statement.expression);
             if (expression == null) {
                 try error_report_array.addExpectedExpressionReport(root_node.position);
                 return null;
@@ -638,7 +1059,7 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
             return root_node_index;
         },
         .call_expression => {
-            const target = try simplify(ast_node_array, error_report_array, root_node.data.call_expression.target);
+            const target = try simplify(source, ast_node_array, error_report_array, root_node.data.call_expression.target);
             if (target == null) {
                 try error_report_array.addExpectedExpressionReport(root_node.position);
                 return null;
@@ -647,7 +1068,7 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
                 .kind = .call_expression,
                 .data = .{
                     .call_expression = .{
-                        .parameter = try simplify(ast_node_array, error_report_array, root_node.data.call_expression.parameter),
+                        .parameter = try simplify(source, ast_node_array, error_report_array, root_node.data.call_expression.parameter),
                         .target = target.?,
                     },
                 },
@@ -657,7 +1078,7 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
             return root_node_index;
         },
         .call_parameter => {
-            const expression = try simplify(ast_node_array, error_report_array, root_node.data.call_parameter.expression);
+            const expression = try simplify(source, ast_node_array, error_report_array, root_node.data.call_parameter.expression);
             if (expression == null) {
                 try error_report_array.addExpectedExpressionReport(root_node.position);
                 return null;
@@ -667,7 +1088,7 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
                 .data = .{
                     .call_parameter = .{
                         .expression = expression.?,
-                        .next = try simplify(ast_node_array, error_report_array, root_node.data.call_parameter.next),
+                        .next = try simplify(source, ast_node_array, error_report_array, root_node.data.call_parameter.next),
                     },
                 },
                 .position = root_node.position,
@@ -676,7 +1097,7 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
             return root_node_index;
         },
         .call_statement => {
-            const expression = try simplify(ast_node_array, error_report_array, root_node.data.call_statement.call_expression);
+            const expression = try simplify(source, ast_node_array, error_report_array, root_node.data.call_statement.call_expression);
             if (expression == null) {
                 // error_report_array.addExpectedExpressionReport(root_node.position);
                 return null;
@@ -694,10 +1115,10 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
             return root_node_index;
         },
         .comment => {
-            return try simplify(ast_node_array, error_report_array, root_node.data.comment.next);
+            return try simplify(source, ast_node_array, error_report_array, root_node.data.comment.next);
         },
         .continue_statement => {
-            const expression = try simplify(ast_node_array, error_report_array, root_node.data.continue_statement.expression);
+            const expression = try simplify(source, ast_node_array, error_report_array, root_node.data.continue_statement.expression);
             if (expression == null) {
                 try error_report_array.addExpectedExpressionReport(root_node.position);
                 return null;
@@ -737,7 +1158,7 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
                     };
                 }
             }.getExpression;
-            const expression = try simplify(ast_node_array, error_report_array, root_node.data.expression.expression);
+            const expression = try simplify(source, ast_node_array, error_report_array, root_node.data.expression.expression);
             if (expression == null) {
                 return null;
             }
@@ -770,9 +1191,9 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
                 .kind = .function_attribute,
                 .data = .{
                     .function_attribute = .{
-                        .expression = try simplify(ast_node_array, error_report_array, root_node.data.function_attribute.expression),
+                        .expression = try simplify(source, ast_node_array, error_report_array, root_node.data.function_attribute.expression),
                         .kind = root_node.data.function_attribute.kind,
-                        .next = try simplify(ast_node_array, error_report_array, root_node.data.function_attribute.next),
+                        .next = try simplify(source, ast_node_array, error_report_array, root_node.data.function_attribute.next),
                     },
                 },
                 .position = root_node.position,
@@ -785,9 +1206,9 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
                 .kind = .function_expression,
                 .data = .{
                     .function_expression = .{
-                        .attribute = try simplify(ast_node_array, error_report_array, root_node.data.function_expression.attribute),
-                        .expression = try simplify(ast_node_array, error_report_array, root_node.data.function_expression.expression),
-                        .parameter = try simplify(ast_node_array, error_report_array, root_node.data.function_expression.parameter),
+                        .attribute = try simplify(source, ast_node_array, error_report_array, root_node.data.function_expression.attribute),
+                        .expression = try simplify(source, ast_node_array, error_report_array, root_node.data.function_expression.expression),
+                        .parameter = try simplify(source, ast_node_array, error_report_array, root_node.data.function_expression.parameter),
                     },
                 },
                 .position = root_node.position,
@@ -796,7 +1217,7 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
             return root_node_index;
         },
         .function_parameter => {
-            const expression = try simplify(ast_node_array, error_report_array, root_node.data.function_parameter.expression);
+            const expression = try simplify(source, ast_node_array, error_report_array, root_node.data.function_parameter.expression);
             if (expression == null) {
                 try error_report_array.addExpectedExpressionReport(root_node.position);
                 return null;
@@ -808,7 +1229,7 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
                         .access_attribute = root_node.data.function_parameter.access_attribute,
                         .expression = expression.?,
                         .name = root_node.data.function_parameter.name,
-                        .next = try simplify(ast_node_array, error_report_array, root_node.data.function_parameter.next),
+                        .next = try simplify(source, ast_node_array, error_report_array, root_node.data.function_parameter.next),
                     },
                 },
                 .position = root_node.position,
@@ -817,8 +1238,8 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
             return root_node_index;
         },
         .label_expression => {
-            const expression = try simplify(ast_node_array, error_report_array, root_node.data.label_expression.expression);
-            const label = try simplify(ast_node_array, error_report_array, root_node.data.label_expression.label);
+            const expression = try simplify(source, ast_node_array, error_report_array, root_node.data.label_expression.expression);
+            const label = try simplify(source, ast_node_array, error_report_array, root_node.data.label_expression.label);
             if (expression == null) {
                 try error_report_array.addExpectedExpressionReport(root_node.position);
                 invalid = true;
@@ -845,10 +1266,34 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
             return root_node_index;
         },
         .literal_expression => {
+            if (root_node.data.literal_expression.kind == .string) {
+                const new_node = try decodedString(source, root_node, error_report_array);
+                if (new_node) |_node| {
+                    try ast_node_array.set(root_node_index.?, _node);
+                } else {
+                    return null;
+                }
+            } else if (root_node.data.literal_expression.kind == .identifier) {
+                if (std.mem.startsWith(u8, source[root_node.data.literal_expression.position.start..root_node.data.literal_expression.position.end], "@\"")) {
+                    const new_node = try decodedString(source, root_node, error_report_array);
+                    if (new_node) |_node| {
+                        try ast_node_array.set(root_node_index.?, _node);
+                    } else {
+                        return null;
+                    }
+                }
+            } else if (root_node.data.literal_expression.kind == .char) {
+                const new_node = try decodedChar(source, root_node, error_report_array);
+                if (new_node) |_node| {
+                    try ast_node_array.set(root_node_index.?, _node);
+                } else {
+                    return null;
+                }
+            }
             return root_node_index;
         },
         .match_case => {
-            const expression = try simplify(ast_node_array, error_report_array, root_node.data.match_case.expression);
+            const expression = try simplify(source, ast_node_array, error_report_array, root_node.data.match_case.expression);
             if (expression == null) {
                 try error_report_array.addExpectedExpressionReport(root_node.position);
                 return null;
@@ -858,7 +1303,7 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
                 .data = .{
                     .match_case = .{
                         .expression = expression.?,
-                        .next = try simplify(ast_node_array, error_report_array, root_node.data.match_case.next),
+                        .next = try simplify(source, ast_node_array, error_report_array, root_node.data.match_case.next),
                     },
                 },
                 .position = root_node.position,
@@ -867,7 +1312,7 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
             return root_node_index;
         },
         .match_expression => {
-            const expression = try simplify(ast_node_array, error_report_array, root_node.data.match_expression.expression);
+            const expression = try simplify(source, ast_node_array, error_report_array, root_node.data.match_expression.expression);
             if (expression == null) {
                 try error_report_array.addExpectedExpressionReport(root_node.position);
                 return null;
@@ -876,7 +1321,7 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
                 .kind = .match_expression,
                 .data = .{
                     .match_expression = .{
-                        .case = try simplify(ast_node_array, error_report_array, root_node.data.match_expression.case),
+                        .case = try simplify(source, ast_node_array, error_report_array, root_node.data.match_expression.case),
                         .expression = expression.?,
                     },
                 },
@@ -886,7 +1331,7 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
             return root_node_index;
         },
         .multiple_expression => {
-            const expression = try simplify(ast_node_array, error_report_array, root_node.data.multiple_expression.expression);
+            const expression = try simplify(source, ast_node_array, error_report_array, root_node.data.multiple_expression.expression);
             if (expression == null) {
                 try error_report_array.addExpectedExpressionReport(root_node.position);
                 return null;
@@ -896,7 +1341,7 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
                 .data = .{
                     .multiple_expression = .{
                         .expression = expression.?,
-                        .next = try simplify(ast_node_array, error_report_array, root_node.data.multiple_expression.next),
+                        .next = try simplify(source, ast_node_array, error_report_array, root_node.data.multiple_expression.next),
                     },
                 },
                 .position = root_node.position,
@@ -905,7 +1350,7 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
             return root_node_index;
         },
         .root => {
-            const expression = try simplify(ast_node_array, error_report_array, root_node.data.root.containor);
+            const expression = try simplify(source, ast_node_array, error_report_array, root_node.data.root.containor);
             if (expression == null) {
                 return null;
             }
@@ -935,11 +1380,11 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
                     };
                 }
             }.getStatement;
-            const statement = try simplify(ast_node_array, error_report_array, root_node.data.statement.statement);
+            const statement = try simplify(source, ast_node_array, error_report_array, root_node.data.statement.statement);
             if (statement == null) {
                 return null;
             }
-            const next = try simplify(ast_node_array, error_report_array, root_node.data.statement.next);
+            const next = try simplify(source, ast_node_array, error_report_array, root_node.data.statement.next);
             const statement_node = try getStatement(statement.?, ast_node_array, error_report_array);
 
             const new_node = ASTNode{
@@ -967,9 +1412,9 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
                 .kind = .type_entry,
                 .data = .{
                     .type_entry = .{
-                        .expression = try simplify(ast_node_array, error_report_array, root_node.data.type_entry.expression),
+                        .expression = try simplify(source, ast_node_array, error_report_array, root_node.data.type_entry.expression),
                         .name = root_node.data.type_entry.name,
-                        .next = try simplify(ast_node_array, error_report_array, root_node.data.type_entry.next),
+                        .next = try simplify(source, ast_node_array, error_report_array, root_node.data.type_entry.next),
                     },
                 },
                 .position = root_node.position,
@@ -982,7 +1427,7 @@ pub fn simplify(ast_node_array: *ASTNodeArray, error_report_array: *_error.Error
                 .kind = .type_expression,
                 .data = .{
                     .type_expression = .{
-                        .entry = try simplify(ast_node_array, error_report_array, root_node.data.type_expression.entry),
+                        .entry = try simplify(source, ast_node_array, error_report_array, root_node.data.type_expression.entry),
                         .kind = root_node.data.type_expression.kind,
                     },
                 },

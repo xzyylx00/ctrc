@@ -8,7 +8,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .root_source_file = b.path("src/ctrc.zig"),
-        .strip = true,
     });
 
     const executable = b.addExecutable(.{

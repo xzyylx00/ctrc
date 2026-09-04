@@ -63,7 +63,7 @@ pub const Range = struct {
     }
 };
 
-source: ?[:0]const u8,
+source: ?[:0]u8,
 token_array: ?TokenArray,
 error_report_array: ErrorReportArray,
 ast_node_array: ASTNodeArray,
@@ -93,6 +93,9 @@ pub fn deinit(module: *Module) void {
     if (module.token_array) |*token_array| {
         module.allocator.free(token_array.tokens);
     }
+    if (module.source) |source| {
+        module.allocator.free(source);
+    }
 
     module.* = Module{
         .allocator = undefined,
@@ -104,9 +107,9 @@ pub fn deinit(module: *Module) void {
     };
 }
 
-pub fn lex(module: *Module, source: [:0]const u8) error{ OutOfMemory, OutOfCapacity }!void {
-    module.source = source;
-    var lexer = Lexer.init(source);
+pub fn lex(module: *Module, source: []const u8) error{ OutOfMemory, OutOfCapacity }!void {
+    module.source = try module.allocator.dupeZ(u8, source);
+    var lexer = Lexer.init(module.source.?);
 
     var token_count: usize = 0;
     while (true) {
@@ -124,7 +127,7 @@ pub fn lex(module: *Module, source: [:0]const u8) error{ OutOfMemory, OutOfCapac
     };
     module.error_report_array.clear();
 
-    lexer = Lexer.init(source);
+    lexer = Lexer.init(module.source.?);
 
     var token_index: usize = 0;
     while (true) {
@@ -160,7 +163,9 @@ pub fn format(module: *const Module, writer: *std.Io.Writer) !void {
 }
 
 pub fn simplify(module: *Module) error{ OutOfRange, OutOfCapacity }!void {
-    module.ast_node_root = try ast.simplify(&module.ast_node_array, &module.error_report_array, module.ast_node_root);
+    if (module.source) |source| {
+        module.ast_node_root = try ast.simplify(source, &module.ast_node_array, &module.error_report_array, module.ast_node_root);
+    }
 }
 
 pub fn errorCount(module: *const Module) usize {

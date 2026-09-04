@@ -59,6 +59,7 @@ pub const ErrorReport = struct {
         // AST Simplify
         // expected_expression
         expected_literal_expression,
+        expected_character,
         unexpected_node,
     };
 
@@ -78,6 +79,9 @@ pub const ErrorReport = struct {
             },
             .invalid_character => {
                 std.log.debug("{s}:{d}:{d}: Invalid Character", .{ file_name, error_report.position.line, error_report.position.pos });
+            },
+            .expected_character => {
+                std.log.debug("{s}:{d}:{d}: Expected Character", .{ file_name, error_report.position.line, error_report.position.pos });
             },
             .unexpected_node => {
                 std.log.debug("{s}:{d}:{d}: Unexpected Node, expect {s}, found {any}", .{ file_name, error_report.position.line, error_report.position.pos, error_report.data.unexpected_node.expected, error_report.data.unexpected_node.found });
@@ -122,6 +126,22 @@ pub const ErrorReportArray = struct {
 
         error_report_array.error_reports[error_report_array.used] = error_report;
         error_report_array.used += 1;
+    }
+
+    pub fn addInvalidCharacter(error_report_array: *ErrorReportArray, position: Module.Position) error{OutOfCapacity}!void {
+        try error_report_array.addReport(.{
+            .kind = .invalid_character,
+            .data = undefined,
+            .position = position,
+        });
+    }
+
+    pub fn addExpectedCharacter(error_report_array: *ErrorReportArray, position: Module.Position) error{OutOfCapacity}!void {
+        try error_report_array.addReport(.{
+            .kind = .expected_character,
+            .data = undefined,
+            .position = position,
+        });
     }
 
     pub fn addUnexpectedTokenReport(error_report_array: *ErrorReportArray, expected: [:0]const u8, found: Module.Range, position: Module.Position) error{OutOfCapacity}!void {

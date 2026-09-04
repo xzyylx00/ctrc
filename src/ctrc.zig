@@ -11,6 +11,7 @@ const test_file = @embedFile("test.ctr");
 const MainCommand = enum {
     fmt,
     help,
+    simplify,
 };
 
 pub fn main(init: std.process.Init) !u8 {
@@ -50,6 +51,8 @@ pub fn main(init: std.process.Init) !u8 {
                 main_command = MainCommand.fmt;
             } else if (std.mem.eql(u8, arg, "help")) {
                 main_command = MainCommand.help;
+            } else if (std.mem.eql(u8, arg, "simplify")) {
+                main_command = MainCommand.simplify;
             } else {
                 std.debug.print("Unrecognized command '{s}', please try '{s} help' for help", .{ arg, program_name orelse "ctrc" });
                 return 255;
@@ -66,13 +69,12 @@ pub fn main(init: std.process.Init) !u8 {
                     };
                     defer source_file.close(init.io);
                     const source_length = try source_file.length(init.io);
-                    const source = try init.gpa.alloc(u8, source_length + 1);
+                    const source = try init.gpa.alloc(u8, source_length);
                     defer init.gpa.free(source);
 
                     _ = try source_file.readPositionalAll(init.io, source, 0);
-                    source[source_length] = 0;
 
-                    module.lex(source[0..source_length :0]) catch |err| {
+                    module.lex(source) catch |err| {
                         std.debug.print("Error {s} occurred while lexing file {s}", .{ @errorName(err), arg });
                         continue;
                     };
@@ -80,7 +82,6 @@ pub fn main(init: std.process.Init) !u8 {
                         std.debug.print("Error {s} occurred while parsing file {s}", .{ @errorName(err), arg });
                         continue;
                     };
-                    module.report(arg);
                     // try ctr.ast.dump(&module.ast_node_array, module.source.?, module.ast_node_root.?, 0);
 
                     if (module.errorCount() == 0) {
@@ -90,6 +91,48 @@ pub fn main(init: std.process.Init) !u8 {
                             continue;
                         };
                         try source_writer.end();
+                        std.debug.print("{s}", .{arg});
+                    } else {
+                        module.report(arg);
+                    }
+                },
+                .simplify => {
+                    var module = try ctr.Module.init(init.gpa, 1024, 32768);
+                    defer module.deinit();
+
+                    const source_file = std.Io.Dir.cwd().openFile(init.io, arg, .{ .mode = .read_only }) catch |err| {
+                        std.debug.print("Error {s} occurred while opening file {s}", .{ @errorName(err), arg });
+                        continue;
+                    };
+                    defer source_file.close(init.io);
+                    const source_length = try source_file.length(init.io);
+                    const source = try init.gpa.alloc(u8, source_length);
+                    defer init.gpa.free(source);
+
+                    _ = try source_file.readPositionalAll(init.io, source, 0);
+
+                    module.lex(source) catch |err| {
+                        std.debug.print("Error {s} occurred while lexing file {s}", .{ @errorName(err), arg });
+                        continue;
+                    };
+                    module.parse() catch |err| {
+                        std.debug.print("Error {s} occurred while parsing file {s}", .{ @errorName(err), arg });
+                        continue;
+                    };
+                    // try ctr.ast.dump(&module.ast_node_array, module.source.?, module.ast_node_root.?, 0);
+                    module.simplify() catch |err| {
+                        std.debug.print("Error {s} occurred while simplifying file {s}", .{ @errorName(err), arg });
+                        continue;
+                    };
+
+                    if (module.errorCount() == 0) {
+                        var source_writer = std.Io.File.stdout().writer(init.io, &.{});
+                        module.format(&source_writer.interface) catch |err| {
+                            std.debug.print("Error {s} occurred while writing formatted file {s}", .{ @errorName(err), arg });
+                            continue;
+                        };
+                    } else {
+                        module.report(arg);
                     }
                     std.debug.print("{s}", .{arg});
                 },
