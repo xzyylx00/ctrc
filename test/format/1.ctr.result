@@ -7,8 +7,8 @@ _ = myAlloc;
 #! Invisible
 #!
 in typee = type ("Entry") {
-    aaA,
-    AAAA,
+    aaA;
+    AAAA;
 };
 #!
 in fib = function (in num: uint64)external("c");

@@ -1291,7 +1291,7 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_
 
         peek_token = lexer.peek();
         if (peek_token) |_peek_token| {
-            if (_peek_token.kind == .comma) {
+            if (_peek_token.kind == .semicolon) {
                 _ = lexer.next();
                 peek_token = lexer.peek();
                 if (peek_token) |__peek_token| {
@@ -1311,7 +1311,7 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_
                 break;
             }
         } else {
-            try error_report_array.addExpectedTokenReport("',', or '}'", .toPosition(lexer.current()));
+            try error_report_array.addExpectedTokenReport("';', or '}'", .toPosition(lexer.current()));
 
             lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
 
@@ -1328,7 +1328,7 @@ fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_
         } else {
             // XXX Error
             try error_report_array.addUnexpectedTokenReport(
-                "'}'",
+                "';' or '}'",
                 .toRange(_peek_token),
                 .toPosition(_peek_token),
             );
@@ -1441,7 +1441,7 @@ fn parseTypeEntry(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_repor
     }
 
     var expression_node_index: ?usize = undefined;
-    if (try parseSingleExpression(ast_node_array, lexer, error_report_array)) |_expression_node_index| {
+    if (try parseExpression(ast_node_array, lexer, error_report_array)) |_expression_node_index| {
         expression_node_index = _expression_node_index;
     }
     const type_entry_node = ASTNode{

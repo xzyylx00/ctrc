@@ -9,5 +9,5 @@
 in build = #import("build/build.ctr");
 #!
 type ("struct") {
-    build: build,
+    build: build;
 }

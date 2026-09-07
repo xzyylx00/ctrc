@@ -174,7 +174,7 @@ fn formatTypeEntry(ast_node_array: *const ast.ASTNodeArray, source: []const u8, 
         _ = try writer.write(": ");
         try formatExpression(ast_node_array, source, expression, writer, space);
     }
-    _ = try writer.write(",\n");
+    _ = try writer.write(";\n");
     if (root_node.data.type_entry.next != null) {
         try printSpace(space, writer);
     }

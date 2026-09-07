@@ -11,8 +11,8 @@ _ = myAlloc;
 #!
 
 in typee = type("Entry") {
-    aaA,
-    AAAA,
+    aaA;
+    AAAA;
 };
 
 #!
