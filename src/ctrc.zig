@@ -60,7 +60,7 @@ pub fn main(init: std.process.Init) !u8 {
         } else {
             switch (main_command.?) {
                 .fmt => {
-                    var module = try ctr.Module.init(init.gpa, 1024, 32768);
+                    var module = try ctr.Module.init(init.gpa, 1024, 32768, 16384);
                     defer module.deinit();
 
                     const source_file = std.Io.Dir.cwd().openFile(init.io, arg, .{ .mode = .read_write }) catch |err| {
@@ -97,7 +97,7 @@ pub fn main(init: std.process.Init) !u8 {
                     }
                 },
                 .simplify => {
-                    var module = try ctr.Module.init(init.gpa, 1024, 32768);
+                    var module = try ctr.Module.init(init.gpa, 1024, 32768, 16384);
                     defer module.deinit();
 
                     const source_file = std.Io.Dir.cwd().openFile(init.io, arg, .{ .mode = .read_only }) catch |err| {

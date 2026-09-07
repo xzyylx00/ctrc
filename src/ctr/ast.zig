@@ -498,7 +498,7 @@ pub fn dump(ast_node_array: *ASTNodeArray, source: [:0]const u8, root_node_index
         .attributed_expression => {
             std.debug.print("Attributed Expression:\n", .{});
             printSpace(space + indent);
-            std.debug.print("Attrubute: {s}\n", .{
+            std.debug.print("Attribute: {s}\n", .{
                 switch (root_node.data.attributed_expression.kind) {
                     .in => "in",
                     .inout => "inout",
@@ -1274,7 +1274,7 @@ pub fn simplify(source: [:0]u8, ast_node_array: *ASTNodeArray, error_report_arra
                     return null;
                 }
             } else if (root_node.data.literal_expression.kind == .identifier) {
-                if (std.mem.startsWith(u8, source[root_node.data.literal_expression.position.start..root_node.data.literal_expression.position.end], "@\"")) {
+                if (std.mem.startsWith(u8, source[root_node.data.literal_expression.position.start..root_node.data.literal_expression.position.end], "#\"")) {
                     const new_node = try decodedString(source, root_node, error_report_array);
                     if (new_node) |_node| {
                         try ast_node_array.set(root_node_index.?, _node);

@@ -22,7 +22,7 @@ const Parser = @import("parser.zig");
 const ErrorReportArray = @import("error.zig").ErrorReportArray;
 const TokenArray = @import("token_array.zig").TokenArray;
 const ASTNodeArray = ast.ASTNodeArray;
-
+const StringPool = @import("string_pool.zig").StringPool;
 const Module = @This();
 
 pub const Position = struct {
@@ -68,9 +68,10 @@ token_array: ?TokenArray,
 error_report_array: ErrorReportArray,
 ast_node_array: ASTNodeArray,
 ast_node_root: ?usize,
+string_pool: StringPool,
 allocator: std.mem.Allocator,
 
-pub fn init(allocator: std.mem.Allocator, error_report_array_size: u32, ast_node_array_size: u32) error{OutOfMemory}!Module {
+pub fn init(allocator: std.mem.Allocator, error_report_array_size: u32, ast_node_array_size: u32, string_pool_size: u32) error{OutOfMemory}!Module {
     var error_report_array = try ErrorReportArray.init(allocator, error_report_array_size);
     errdefer error_report_array.deinit(allocator);
 
@@ -79,6 +80,7 @@ pub fn init(allocator: std.mem.Allocator, error_report_array_size: u32, ast_node
 
     return Module{
         .allocator = allocator,
+        .string_pool = try StringPool.init(allocator, string_pool_size),
         .ast_node_array = ast_node_array,
         .error_report_array = error_report_array,
         .source = null,
@@ -97,8 +99,11 @@ pub fn deinit(module: *Module) void {
         module.allocator.free(source);
     }
 
+    module.string_pool.deinit();
+
     module.* = Module{
         .allocator = undefined,
+        .string_pool = undefined,
         .ast_node_array = undefined,
         .error_report_array = undefined,
         .ast_node_root = null,

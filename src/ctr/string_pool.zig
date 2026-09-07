@@ -23,12 +23,12 @@ pub const StringPool = struct {
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, size: usize) error{OutOfMemory}!StringPool {
-        const array = try StableIndexArrayUnmanaged([]const u8).init(allocator, size);
+        var array = try StableIndexArrayUnmanaged([]const u8).init(allocator, size);
         errdefer array.deinit(allocator);
 
-        const index: std.StringHashMapUnmanaged(usize) = .empty;
+        var index: std.StringHashMapUnmanaged(usize) = .empty;
         errdefer index.deinit(allocator);
-        try index.ensureTotalCapacity(allocator, size);
+        try index.ensureTotalCapacity(allocator, @intCast(size));
 
         return StringPool{
             .array = array,
