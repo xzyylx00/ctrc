@@ -15,192 +15,77 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 const std = @import("std");
-const Module = @import("module.zig");
-const ast = @import("ast.zig");
+const Self = @This();
+const StringPool = @import("StringPool.zig");
 
-pub const ErrorReport = struct {
-    position: Module.Position,
+pub const Reporter = struct {
+    lock: std.Io.Mutex,
+    allocator: std.mem.Allocator,
+    list: std.ArrayList(Error),
 
-    kind: ErrorReportKind,
-    data: union {
-        expected_token: ExpectedToken,
-        unexpected_token: UnexpectedToken,
-        invalid_character: InvalidCharacter,
-        unexpected_node: UnexpectedNode,
-    },
+    pub fn init(allocator: std.mem.Allocator) error{OutOfMemory}!Reporter {
+        return Reporter{
+            .lock = .init,
+            .allocator = allocator,
+            .list = try .initCapacity(allocator, 128),
+        };
+    }
 
-    const InvalidCharacter = struct {
-        found: [:0]const u8,
-    };
+    pub fn deinit(self: *Reporter) void {
+        for (self.list.items) |_error| {
+            self.allocator.free(_error.reason);
+        }
+        self.list.clearAndFree(self.allocator);
+        self.* = undefined;
+    }
 
-    const UnexpectedToken = struct {
-        expected: [:0]const u8,
-        found: Module.Range,
-    };
+    pub fn add(self: *Reporter, io: std.Io, level: Level, filename: u32, line: u32, pos: u32, comptime fmt: []const u8, args: anytype) error{OutOfMemory}!void {
+        self.lock.lock(io) catch unreachable;
+        defer self.lock.unlock(io);
 
-    const ExpectedToken = struct {
-        expected: [:0]const u8,
-    };
+        const reason = try std.fmt.allocPrint(self.allocator, fmt, args);
+        errdefer self.allocator.free(reason);
+        self.list.append(self.allocator, Error{
+            .filename = filename,
+            .line = line,
+            .position = pos,
+            .reason = reason,
+            .level = level,
+        });
+    }
 
-    const UnexpectedNode = struct {
-        expected: [:0]const u8,
-        found: ast.ASTNode.Kind,
-    };
+    pub fn report(self: *Reporter, io: std.Io, string_pool: *StringPool, writer: std.Io.Writer) error{WriteFailed}!void {
+        self.lock.lock(io) catch unreachable;
+        defer self.lock.unlock(io);
 
-    const ErrorReportKind = enum {
-        // Lexer
-        invalid_character,
-
-        // Parser
-        unexpected_token,
-        expected_token,
-        expected_expression,
-
-        // AST Simplify
-        // expected_expression
-        expected_literal_expression,
-        expected_character,
-        unexpected_node,
-    };
-
-    pub fn report(error_report: ErrorReport, source: [:0]const u8, file_name: []const u8) void {
-        switch (error_report.kind) {
-            .unexpected_token => {
-                std.log.debug("{s}:{d}:{d}: Unexpected Token, expect {s}, found {s}", .{ file_name, error_report.position.line, error_report.position.pos, error_report.data.unexpected_token.expected, source[error_report.data.unexpected_token.found.start..error_report.data.unexpected_token.found.end] });
-            },
-            .expected_token => {
-                std.log.debug("{s}:{d}:{d}: Expected Token, expect {s}", .{ file_name, error_report.position.line, error_report.position.pos, error_report.data.expected_token.expected });
-            },
-            .expected_expression => {
-                std.log.debug("{s}:{d}:{d}: Expected Expression", .{ file_name, error_report.position.line, error_report.position.pos });
-            },
-            .expected_literal_expression => {
-                std.log.debug("{s}:{d}:{d}: Expected Literal Expression", .{ file_name, error_report.position.line, error_report.position.pos });
-            },
-            .invalid_character => {
-                std.log.debug("{s}:{d}:{d}: Invalid Character", .{ file_name, error_report.position.line, error_report.position.pos });
-            },
-            .expected_character => {
-                std.log.debug("{s}:{d}:{d}: Expected Character", .{ file_name, error_report.position.line, error_report.position.pos });
-            },
-            .unexpected_node => {
-                std.log.debug("{s}:{d}:{d}: Unexpected Node, expect {s}, found {any}", .{ file_name, error_report.position.line, error_report.position.pos, error_report.data.unexpected_node.expected, error_report.data.unexpected_node.found });
-            },
+        for (self.list.items) |_error| {
+            try writer.print("{s} {s}:{d}:{d}: {s}\n", .{ switch (_error.level) {
+                .tips => "[TIPS]",
+                .panic => "[PANIC]",
+                .@"error" => "[ERROR]",
+                .warning => "[WARNING]",
+                .info => "[INFO]",
+                .debug => "[DEBUG]",
+                .trace => "[TRACE]",
+            }, string_pool.get(_error.filename) catch "unnamed", _error.line, _error.position, _error.reason });
         }
     }
 };
 
-pub const ErrorReportArray = struct {
-    error_reports: []ErrorReport,
-    used: usize,
+pub const Error = struct {
+    filename: u32,
+    line: u32,
+    position: u32,
+    reason: []const u8,
+    level: Level,
+};
 
-    pub fn init(allocator: std.mem.Allocator, size: usize) error{OutOfMemory}!ErrorReportArray {
-        const error_reports = try allocator.alloc(ErrorReport, size);
-        return ErrorReportArray{
-            .error_reports = error_reports,
-            .used = 0,
-        };
-    }
-
-    pub fn deinit(error_report_array: *ErrorReportArray, allocator: std.mem.Allocator) void {
-        allocator.free(error_report_array.error_reports);
-
-        error_report_array.* = ErrorReportArray{
-            .error_reports = undefined,
-            .used = 0,
-        };
-    }
-
-    pub fn clear(error_report_array: *ErrorReportArray) void {
-        error_report_array.used = 0;
-    }
-
-    pub fn raw(error_report_array: *const ErrorReportArray) []ErrorReport {
-        return error_report_array.error_reports[0..error_report_array.used];
-    }
-
-    pub fn addReport(error_report_array: *ErrorReportArray, error_report: ErrorReport) error{OutOfCapacity}!void {
-        if (error_report_array.used == error_report_array.error_reports.len) {
-            return error.OutOfCapacity;
-        }
-
-        error_report_array.error_reports[error_report_array.used] = error_report;
-        error_report_array.used += 1;
-    }
-
-    pub fn addInvalidCharacter(error_report_array: *ErrorReportArray, position: Module.Position) error{OutOfCapacity}!void {
-        try error_report_array.addReport(.{
-            .kind = .invalid_character,
-            .data = undefined,
-            .position = position,
-        });
-    }
-
-    pub fn addExpectedCharacter(error_report_array: *ErrorReportArray, position: Module.Position) error{OutOfCapacity}!void {
-        try error_report_array.addReport(.{
-            .kind = .expected_character,
-            .data = undefined,
-            .position = position,
-        });
-    }
-
-    pub fn addUnexpectedTokenReport(error_report_array: *ErrorReportArray, expected: [:0]const u8, found: Module.Range, position: Module.Position) error{OutOfCapacity}!void {
-        try error_report_array.addReport(.{
-            .kind = .unexpected_token,
-            .data = .{
-                .unexpected_token = .{
-                    .found = found,
-                    .expected = expected,
-                },
-            },
-            .position = position,
-        });
-    }
-
-    pub fn addUnexpectedNodeReport(error_report_array: *ErrorReportArray, expected: [:0]const u8, found: ast.ASTNode.Kind, position: Module.Position) error{OutOfCapacity}!void {
-        try error_report_array.addReport(.{
-            .kind = .unexpected_node,
-            .data = .{
-                .unexpected_node = .{
-                    .found = found,
-                    .expected = expected,
-                },
-            },
-            .position = position,
-        });
-    }
-
-    pub fn addExpectedTokenReport(error_report_array: *ErrorReportArray, expected: [:0]const u8, position: Module.Position) error{OutOfCapacity}!void {
-        try error_report_array.addReport(.{
-            .kind = .expected_token,
-            .data = .{
-                .expected_token = .{
-                    .expected = expected,
-                },
-            },
-            .position = position,
-        });
-    }
-
-    pub fn addExpectedExpressionReport(error_report_array: *ErrorReportArray, position: Module.Position) error{OutOfCapacity}!void {
-        try error_report_array.addReport(.{
-            .kind = .expected_expression,
-            .data = undefined,
-            .position = position,
-        });
-    }
-
-    pub fn addExpectedLiteralExpressionReport(error_report_array: *ErrorReportArray, position: Module.Position) error{OutOfCapacity}!void {
-        try error_report_array.addReport(.{
-            .kind = .expected_literal_expression,
-            .data = undefined,
-            .position = position,
-        });
-    }
-
-    pub fn report(error_report_array: *const ErrorReportArray, source: [:0]const u8, file_name: []const u8) void {
-        for (error_report_array.raw()) |error_report| {
-            ErrorReport.report(error_report, source, file_name);
-        }
-    }
+pub const Level = enum {
+    tips,
+    panic,
+    @"error",
+    warning,
+    info,
+    debug,
+    trace,
 };

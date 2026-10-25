@@ -14,11 +14,10 @@
 // You should have received a copy of the Lesser GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-pub const Lexer = @import("lexer.zig");
-pub const Module = @import("module.zig");
-pub const ErrorReport = @import("error.zig").ErrorReport;
-pub const ErrorReportArray = @import("error.zig").ErrorReportArray;
-
-pub const ast = @import("ast.zig");
-pub const parser = @import("parser.zig");
-pub const format = @import("format.zig");
+pub const Compiler = @import("Compiler.zig");
+pub const ASTNode = @import("ASTNode.zig");
+pub const Expression = @import("Expression.zig");
+pub const Symbol = @import("Symbol.zig");
+pub const Tokenizer = @import("Tokenizer.zig");
+pub const Pool = @import("Pool.zig").Pool;
+pub const Module = @import("Module.zig");

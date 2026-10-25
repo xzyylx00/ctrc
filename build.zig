@@ -5,14 +5,14 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const module = b.createModule(.{
+        .root_source_file = b.path("src/ctrc.zig"),
         .target = target,
         .optimize = optimize,
-        .root_source_file = b.path("src/ctrc.zig"),
     });
 
     const executable = b.addExecutable(.{
-        .name = "ctrc",
         .root_module = module,
+        .name = "ctrc",
     });
 
     b.installArtifact(executable);

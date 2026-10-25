@@ -1,8 +1,7 @@
 .{
     .name = .ctrc,
     .version = "0.0.1",
-    .dependencies = .{},
     .minimum_zig_version = "0.16.0",
     .paths = .{""},
-    .fingerprint = 0x929d6ceb4bea06b0,
+    .fingerprint = 0x929d6cebb2f9958e,
 }

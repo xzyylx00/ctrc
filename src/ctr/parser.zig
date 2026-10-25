@@ -15,2481 +15,3543 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 const std = @import("std");
-const Lexer = @import("lexer.zig");
-const Module = @import("module.zig");
-const ErrorReportArray = @import("error.zig").ErrorReportArray;
-const TokenArray = @import("token_array.zig").TokenArray;
-const Token = Lexer.Token;
-const ASTNode = @import("ast.zig").ASTNode;
-const ASTNodeArray = @import("ast.zig").ASTNodeArray;
+const Self = @This();
+const ASTNode = @import("ASTNode.zig");
+const Tokenizer = @import("Tokenizer.zig");
+const StringPool = @import("StringPool.zig");
+const Error = @import("Error.zig");
+const Stack = @import("Stack.zig").Stack;
 
-const enable_trace = false;
-
-fn releaseASTNode(ast_node_array: *ASTNodeArray, node_index: usize) void {
-    const ast_node = ast_node_array.get(node_index) catch unreachable;
-
-    switch (ast_node.kind) {
-        else => {},
-    }
-}
-
-pub fn parseRoot(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Root at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Root at {any}", .{Module.Position.toPosition(lexer.current())});
+pub const Element = struct {
+    pub const Kind = enum {
+        node,
+        token,
     };
 
-    const ast_node_index = try ast_node_array.alloc();
+    const Data = union {
+        node: ASTNode.ASTNodeHandle,
+        token: Tokenizer.Token,
+    };
 
-    const containor_node_index = try parseBlockExpressionContent(ast_node_array, lexer, error_report_array);
-    if (containor_node_index) |_containor_node_index| {
-        const eof_token = lexer.next();
-        if (eof_token.kind != .eof) {
-            // XXX Error
-            releaseASTNode(ast_node_array, _containor_node_index);
-            ast_node_array.free(ast_node_index) catch unreachable;
+    kind: Kind,
+    data: Data,
+};
 
-            try error_report_array.addUnexpectedTokenReport("\\0", .toRange(eof_token), .toPosition(eof_token));
+// Dynamtic Stack
+pub const ElementStack = Stack(Element, 1024);
+pub const StateStack = Stack(u8, 1024);
 
-            return null;
-        }
+state_stack: StateStack,
+element_stack: ElementStack,
+lock: std.Io.Mutex,
+pool: *ASTNode.ASTNodePool,
 
-        const ast_node = ASTNode{
-            .kind = .root,
-            .data = .{
-                .root = .{
-                    .containor = _containor_node_index,
-                },
-            },
-            .position = .{
-                .line = 1,
-                .pos = 1,
-            },
-        };
+pub fn init(allocator: std.mem.Allocator, pool: *ASTNode.ASTNodePool) error{OutOfMemory}!Self {
+    const element_stack = try ElementStack.init(allocator);
+    errdefer element_stack.deinit();
 
-        ast_node_array.set(ast_node_index, ast_node) catch unreachable;
-        return ast_node_index;
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedExpressionReport(.toPosition(lexer.current()));
+    const state_stack = try StateStack.init(allocator);
+    errdefer state_stack.deinit();
 
-        ast_node_array.free(ast_node_index) catch unreachable;
-        return null;
-    }
+    return Self{
+        .state_stack = state_stack,
+        .element_stack = element_stack,
+        .lock = .init,
+        .pool = pool,
+    };
 }
 
-fn parseBlockExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Block Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Block Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    };
-    const lbrace_token = lexer.next();
-    if (lbrace_token.kind == .l_brace) {
-        const context_node = try parseBlockExpressionContent(ast_node_array, lexer, error_report_array);
-        if (context_node) |_context_node| {
-            const rbrace_token = lexer.next();
-            if (rbrace_token.kind == .r_brace) {
-                return _context_node;
-            } else {
-                // XXX Error
-                try error_report_array.addUnexpectedTokenReport("}", .toRange(rbrace_token), .toPosition(rbrace_token));
-            }
-            return null;
-        } else {
-            // Should this have error report?
-            return null;
-        }
-    } else {
-        // XXX Error
-        try error_report_array.addUnexpectedTokenReport("{", .toRange(lbrace_token), .toPosition(lbrace_token));
-        return null;
-    }
+pub fn deinit(self: *Self) void {
+    self.state_stack.deinit();
+    self.element_stack.deinit();
+    self.* = undefined;
 }
 
-fn parseBlockExpressionContent(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Block Expression Content at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Block Expression Content at {any}", .{Module.Position.toPosition(lexer.current())});
-    };
-    const ast_node_index = try ast_node_array.alloc();
-
-    var block_expression_node = ASTNode{
-        .kind = .block_expression,
+fn pushToken(self: *Self, token: Tokenizer.Token) error{OutOfMemory}!void {
+    const element = Element{
+        .kind = .token,
         .data = .{
-            .block_expression = .{
-                .expression = undefined,
-                .statement = null,
-            },
+            .token = token,
         },
-        .position = undefined,
     };
 
-    var first_statement_node_index: ?usize = null;
-    var current_statement_node_index: ?usize = null;
-    while (try parseStatement(ast_node_array, lexer, error_report_array)) |statement_node_index| {
-        if (first_statement_node_index == null) {
-            first_statement_node_index = statement_node_index;
-        }
-        if (current_statement_node_index) |_current_statement_node_index| {
-            const current_statement_node = ast_node_array.get(_current_statement_node_index) catch unreachable;
-            const linked_statement_node = ASTNode{
-                .kind = .statement,
-                .data = .{
-                    .statement = .{
-                        .kind = current_statement_node.data.statement.kind,
-                        .next = statement_node_index,
-                        .statement = current_statement_node.data.statement.statement,
-                    },
-                },
-                .position = .toPosition(lexer.current()),
-            };
-            ast_node_array.set(_current_statement_node_index, linked_statement_node) catch unreachable;
-        }
-        current_statement_node_index = statement_node_index;
-    }
-
-    if (first_statement_node_index) |_first_statement_nodex_index| {
-        block_expression_node = .{
-            .kind = .block_expression,
-            .data = .{
-                .block_expression = .{
-                    .statement = _first_statement_nodex_index,
-                    .expression = undefined,
-                },
-            },
-            .position = .toPosition(lexer.current()),
-        };
-    }
-
-    if (try parseExpression(ast_node_array, lexer, error_report_array)) |expression_node_index| {
-        block_expression_node = .{
-            .kind = .block_expression,
-            .data = .{
-                .block_expression = .{
-                    .statement = block_expression_node.data.block_expression.statement,
-                    .expression = expression_node_index,
-                },
-            },
-            .position = .toPosition(lexer.current()),
-        };
-        ast_node_array.set(ast_node_index, block_expression_node) catch unreachable;
-        return ast_node_index;
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedExpressionReport(.toPosition(lexer.current()));
-
-        ast_node_array.free(ast_node_index) catch unreachable;
-        if (first_statement_node_index) |_first_statement_node_index| {
-            releaseASTNode(ast_node_array, _first_statement_node_index);
-        }
-        return null;
-    }
+    try self.element_stack.push(element);
 }
 
-fn parseStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Statement at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+fn pushASTNode(self: *Self, node: ASTNode.ASTNodeHandle) error{OutOfMemory}!void {
+    const element = Element{
+        .kind = .node,
+        .data = .{
+            .node = node,
+        },
     };
-    const statement_node_index = try ast_node_array.alloc();
-    const previous_lexer = lexer.*;
 
-    if (try parseCommentedStatement(ast_node_array, lexer, error_report_array)) |commented_statement| {
-        const statement_node = ASTNode{
-            .kind = .statement,
-            .data = .{
-                .statement = .{
-                    .kind = .commented,
-                    .statement = commented_statement,
-                    .next = null,
-                },
-            },
-            .position = .toPosition(lexer.current()),
-        };
-
-        // Should this have error report?
-        ast_node_array.set(statement_node_index, statement_node) catch unreachable;
-        return statement_node_index;
-    } else {
-        lexer.* = previous_lexer;
-    }
-
-    if (try parseAssignmentStatement(ast_node_array, lexer, error_report_array)) |assignment_node_index| {
-        const statement_node = ASTNode{
-            .kind = .statement,
-            .data = .{
-                .statement = .{
-                    .kind = .assignment,
-                    .statement = assignment_node_index,
-                    .next = null,
-                },
-            },
-            .position = .toPosition(lexer.current()),
-        };
-
-        // Should this have error report?
-        ast_node_array.set(statement_node_index, statement_node) catch unreachable;
-        return statement_node_index;
-    } else {
-        lexer.* = previous_lexer;
-    }
-
-    if (try parseCallStatement(ast_node_array, lexer, error_report_array)) |call_node_index| {
-        const statement_node = ASTNode{
-            .kind = .statement,
-            .data = .{
-                .statement = .{
-                    .kind = .call,
-                    .statement = call_node_index,
-                    .next = null,
-                },
-            },
-            .position = .toPosition(lexer.current()),
-        };
-
-        // Should this have error report?
-        ast_node_array.set(statement_node_index, statement_node) catch unreachable;
-        return statement_node_index;
-    } else {
-        lexer.* = previous_lexer;
-    }
-
-    if (try parseBreakStatement(ast_node_array, lexer, error_report_array)) |break_node_index| {
-        const statement_node = ASTNode{
-            .kind = .statement,
-            .data = .{
-                .statement = .{
-                    .kind = .@"break",
-                    .statement = break_node_index,
-                    .next = null,
-                },
-            },
-            .position = .toPosition(lexer.current()),
-        };
-
-        // Should this have error report?
-        ast_node_array.set(statement_node_index, statement_node) catch unreachable;
-        return statement_node_index;
-    } else {
-        lexer.* = previous_lexer;
-    }
-
-    if (try parseContinueStatement(ast_node_array, lexer, error_report_array)) |continue_node_index| {
-        const statement_node = ASTNode{
-            .kind = .statement,
-            .data = .{
-                .statement = .{
-                    .kind = .@"continue",
-                    .statement = continue_node_index,
-                    .next = null,
-                },
-            },
-            .position = .toPosition(lexer.current()),
-        };
-
-        // Should this have error report?
-        ast_node_array.set(statement_node_index, statement_node) catch unreachable;
-        return statement_node_index;
-    } else {
-        lexer.* = previous_lexer;
-    }
-
-    ast_node_array.free(statement_node_index) catch unreachable;
-    return null;
+    try self.element_stack.push(element);
 }
 
-fn parseAssignmentStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Assignment Statement at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Assignment Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+fn isSyncToken(token: Tokenizer.Token) bool {
+    return switch (token.kind) {
+        .semicolon, .r_brace, .r_paren, .keyword_case, .eof, .percent => true,
+        else => false,
     };
-    const assignment_node_index = try ast_node_array.alloc();
+}
 
-    var first_target_node_index: ?usize = null;
-    var current_target_node_index: ?usize = null;
-    while (try parseAssignmentTarget(ast_node_array, lexer, error_report_array)) |target_node_index| {
-        if (first_target_node_index == null) {
-            first_target_node_index = target_node_index;
-        }
+fn isShiftable(state: u8, kind: Tokenizer.Token.Kind) bool {
+    return switch (state) {
+        0,
+        1,
+        36,
+        => switch (kind) {
+            .l_brace,
+            .l_paren,
+            .underline,
+            .keyword_match,
+            .keyword_function,
+            .keyword_type,
+            .keyword_in,
+            .keyword_out,
+            .keyword_inout,
+            .keyword_ref,
+            .keyword_ptr,
+            .keyword_continue,
+            .keyword_break,
+            .keyword_runtime,
+            .identifier,
+            .string,
+            .integer,
+            .float,
+            .char,
+            .macro,
+            .keyword_nil,
+            => true,
+            else => false,
+        },
+        2,
+        44,
+        52,
+        53,
+        55,
+        56,
+        57,
+        58,
+        61,
+        62,
+        67,
+        87,
+        111,
+        114,
+        115,
+        116,
+        133,
+        => switch (kind) {
+            .l_brace,
+            .l_paren,
+            .keyword_match,
+            .keyword_function,
+            .keyword_type,
+            .keyword_in,
+            .keyword_out,
+            .keyword_inout,
+            .keyword_ref,
+            .keyword_ptr,
+            .keyword_runtime,
+            .identifier,
+            .string,
+            .integer,
+            .float,
+            .char,
+            .macro,
+            .keyword_nil,
+            => true,
+            else => false,
+        },
+        4,
+        5,
+        6,
+        14,
+        24,
+        103,
+        104,
+        => switch (kind) {
+            .l_paren => true,
+            else => false,
+        },
+        12,
+        13,
+        64,
+        76,
+        110,
+        => switch (kind) {
+            .identifier => true,
+            else => false,
+        },
+        15,
+        68,
+        92,
+        119,
+        122,
+        => switch (kind) {
+            .colon => true,
+            else => false,
+        },
+        22 => switch (kind) {
+            .eof => true,
+            else => false,
+        },
+        23,
+        65,
+        127,
+        => switch (kind) {
+            .comma => true,
+            else => false,
+        },
+        31,
+        82,
+        129,
+        => switch (kind) {
+            .semicolon => true,
+            else => false,
+        },
+        34,
+        51,
+        => switch (kind) {
+            .dot => true,
+            else => false,
+        },
+        40 => switch (kind) {
+            .equal => true,
+            else => false,
+        },
+        45 => switch (kind) {
+            .keyword_in,
+            .keyword_out,
+            .keyword_inout,
+            .keyword_ref,
+            .keyword_ptr,
+            => true,
+            else => false,
+        },
+        47 => switch (kind) {
+            .r_brace => true,
+            else => false,
+        },
+        49,
+        74,
+        84,
+        125,
+        126,
+        => switch (kind) {
+            .comma,
+            .r_paren,
+            => true,
+            else => false,
+        },
+        54, 90 => switch (kind) {
+            .keyword_in,
+            .keyword_out,
+            .keyword_inout,
+            => true,
+            else => false,
+        },
+        59 => switch (kind) {
+            .semicolon,
+            .keyword_match,
+            => true,
+            else => false,
+        },
+        73,
+        77,
+        80,
+        => switch (kind) {
+            .r_paren => true,
+            else => false,
+        },
+        78,
+        79,
+        86,
+        137,
+        => switch (kind) {
+            .comma,
+            .semicolon,
+            => true,
+            else => false,
+        },
+        89 => switch (kind) {
+            .l_brace => true,
+            else => false,
+        },
+        91 => switch (kind) {
+            .keyword_external,
+            .keyword_internal,
+            => true,
+            else => false,
+        },
+        93 => switch (kind) {
+            .l_brace => true,
+            else => false,
+        },
+        101 => switch (kind) {
+            .keyword_case => true,
+            else => false,
+        },
+        105 => switch (kind) {
+            .keyword_external,
+            .keyword_internal,
+            .colon,
+            => true,
+            else => false,
+        },
+        112 => switch (kind) {
+            .r_brace,
+            .keyword_case,
+            => true,
+            else => false,
+        },
+        118 => switch (kind) {
+            .percent => true,
+            else => false,
+        },
+        120 => switch (kind) {
+            .r_brace,
+            .identifier,
+            => true,
+            else => false,
+        },
+        else => return false,
+    };
+}
 
-        if (current_target_node_index) |_current_target_node_index| {
-            const current_target_node = ast_node_array.get(_current_target_node_index) catch unreachable;
-            const linked_target_node = ASTNode{
-                .data = .{
-                    .assignment_target = .{
-                        .access_attribute = current_target_node.data.assignment_target.access_attribute,
-                        .name = current_target_node.data.assignment_target.name,
-                        .next = target_node_index,
-                    },
-                },
-                .kind = .assignment_target,
-                .position = .toPosition(lexer.current()),
-            };
+fn skipUntilAcceptable(self: *Self, tokens: []Tokenizer.Token, index: usize) error{ParseFailed}!usize {
+    while (tokens[index].kind != .eof and !isSyncToken(tokens[index])) : (index += 1) {}
 
-            ast_node_array.set(_current_target_node_index, linked_target_node) catch unreachable;
-        }
+    // if (tokens[index].kind == .eof) {
+    //      Handle this
+    // }
 
-        current_target_node_index = target_node_index;
-
-        const peek_token = lexer.peek();
-        if (peek_token) |_peek_token| {
-            if (_peek_token.kind != .comma) {
-                break;
-            } else {
-                _ = lexer.next();
-            }
+    while (self.state_stack.count() != 0) {
+        if (isShiftable(self.state_stack.top() orelse 255, tokens[index].kind)) {
+            return index;
         } else {
-            // XXX Error
-            try error_report_array.addUnexpectedTokenReport("',' or '}'", .toRange(lexer.current()), .toPosition(lexer.current()));
-
-            if (first_target_node_index) |_first_target_node_index| {
-                releaseASTNode(ast_node_array, _first_target_node_index);
-            }
-            ast_node_array.free(assignment_node_index) catch unreachable;
-            return null;
+            _ = self.state_stack.pop();
+            _ = self.element_stack.pop();
         }
     }
 
-    if (first_target_node_index == null) {
-        ast_node_array.free(assignment_node_index) catch unreachable;
-        return null;
-    }
+    return error.ParseFailed;
+}
 
-    const equal_token = lexer.peek();
-    if (equal_token) |_equal_token| {
-        if (_equal_token.kind != .equal) {
-            // XXX Error
-            try error_report_array.addUnexpectedTokenReport(
-                "'='",
-                .toRange(_equal_token),
-                .toPosition(_equal_token),
-            );
-
-            // Skip
-            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-
-            releaseASTNode(ast_node_array, first_target_node_index.?);
-            ast_node_array.free(assignment_node_index) catch unreachable;
-            return null;
-        }
-
-        _ = lexer.next();
-    } else {
-        // XXX Error
-        try error_report_array.addUnexpectedTokenReport("'='", .toRange(lexer.current()), .toPosition(lexer.current()));
-
-        // Skip
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-
-        releaseASTNode(ast_node_array, first_target_node_index.?);
-        ast_node_array.free(assignment_node_index) catch unreachable;
-        return null;
-    }
-
-    var expression_node_index: ?usize = null;
-    if (try parseSingleExpression(ast_node_array, lexer, error_report_array)) |_expression_node_index| {
-        expression_node_index = _expression_node_index;
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedExpressionReport(.toPosition(lexer.current()));
-
-        // Skip
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-
-        releaseASTNode(ast_node_array, first_target_node_index.?);
-        ast_node_array.free(assignment_node_index) catch unreachable;
-        return null;
-    }
-
-    const semicolon_token = lexer.peek();
-    if (semicolon_token) |_semicolon_token| {
-        if (_semicolon_token.kind == .semicolon) {
-            _ = lexer.next();
-            const assignment_node = ASTNode{
-                .data = .{
-                    .assignment_statement = .{
-                        .expression = expression_node_index.?,
-                        .target = first_target_node_index.?,
-                    },
-                },
-                .kind = .assignment_statement,
-                .position = .toPosition(lexer.current()),
+fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
+    switch (state) {
+        0 => {
+            return switch (node_kind) {
+                .module => 22,
+                .expressions => 23,
+                .non_attributed_expression => 24,
+                .wrapped_expressions => 25,
+                .expression => 26,
+                .block => 27,
+                .block_body => 28,
+                .match_expression => 29,
+                .function => 30,
+                .call => 31,
+                .runtime_expression => 32,
+                .literal => 33,
+                .identifier => 34,
+                .type => 35,
+                .statements => 36,
+                .statement => 37,
+                .call_statement => 38,
+                .assignment_statement => 39,
+                .assignment_target => 40,
+                .continue_statement => 41,
+                .break_statement => 42,
+                .label_statement => 43,
+                .access_attribute => 44,
+                .pointer_attribute => 45,
+                .attributed_expression => 46,
+                else => unreachable,
             };
-
-            ast_node_array.set(assignment_node_index, assignment_node) catch unreachable;
-            return assignment_node_index;
-        } else {
-            // XXX Error
-            try error_report_array.addUnexpectedTokenReport(
-                "';'",
-                .toRange(_semicolon_token),
-                .toPosition(_semicolon_token),
-            );
-
-            // Skip
-            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-
-            releaseASTNode(ast_node_array, first_target_node_index.?);
-            releaseASTNode(ast_node_array, expression_node_index.?);
-            return null;
-        }
-    } else {
-        // XXX Error
-
-        try error_report_array.addExpectedTokenReport("';'", .toPosition(lexer.current()));
-
-        // Skip
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-
-        releaseASTNode(ast_node_array, first_target_node_index.?);
-        releaseASTNode(ast_node_array, expression_node_index.?);
-        ast_node_array.free(assignment_node_index) catch unreachable;
-        return null;
+        },
+        1 => {
+            return switch (node_kind) {
+                .expressions => 23,
+                .non_attributed_expression => 24,
+                .wrapped_expressions => 25,
+                .expression => 26,
+                .block => 27,
+                .block_body => 47,
+                .match_expression => 29,
+                .function => 30,
+                .call => 31,
+                .runtime_expression => 32,
+                .literal => 33,
+                .identifier => 34,
+                .type => 35,
+                .statements => 36,
+                .statement => 37,
+                .call_statement => 38,
+                .assignment_statement => 39,
+                .assignment_target => 40,
+                .continue_statement => 41,
+                .break_statement => 42,
+                .label_statement => 43,
+                .access_attribute => 44,
+                .pointer_attribute => 45,
+                .attributed_expression => 46,
+                else => unreachable,
+            };
+        },
+        2 => {
+            return switch (node_kind) {
+                .expressions => 49,
+                .non_attributed_expression => 24,
+                .wrapped_expressions => 25,
+                .expression => 26,
+                .block => 27,
+                .match_expression => 29,
+                .function => 30,
+                .call => 50,
+                .runtime_expression => 32,
+                .literal => 33,
+                .identifier => 51,
+                .type => 35,
+                .access_attribute => 52,
+                .pointer_attribute => 45,
+                .attributed_expression => 46,
+                else => unreachable,
+            };
+        },
+        36 => {
+            return switch (node_kind) {
+                .expressions => 65,
+                .non_attributed_expression => 24,
+                .wrapped_expressions => 25,
+                .expression => 26,
+                .block => 27,
+                .match_expression => 29,
+                .function => 30,
+                .call => 31,
+                .runtime_expression => 32,
+                .literal => 33,
+                .identifier => 34,
+                .type => 35,
+                .statement => 66,
+                .call_statement => 38,
+                .assignment_statement => 39,
+                .assignment_target => 40,
+                .continue_statement => 41,
+                .break_statement => 42,
+                .label_statement => 43,
+                .access_attribute => 44,
+                .pointer_attribute => 45,
+                .attributed_expression => 46,
+                else => unreachable,
+            };
+        },
+        44, 52 => {
+            return switch (node_kind) {
+                .non_attributed_expression => 24,
+                .wrapped_expressions => 25,
+                .expression => 69,
+                .block => 27,
+                .match_expression => 29,
+                .function => 30,
+                .call => 50,
+                .runtime_expression => 32,
+                .literal => 33,
+                .identifier => 51,
+                .type => 35,
+                .access_attribute => 52,
+                .pointer_attribute => 45,
+                .attributed_expression => 46,
+                else => unreachable,
+            };
+        },
+        45 => {
+            return switch (node_kind) {
+                .access_attribute => 52,
+                .pointer_attribute => 45,
+                .attributed_expression => 70,
+                else => unreachable,
+            };
+        },
+        53 => {
+            return switch (node_kind) {
+                .non_attributed_expression => 24,
+                .wrapped_expressions => 25,
+                .expression => 73,
+                .block => 27,
+                .match_expression => 29,
+                .function => 30,
+                .call => 50,
+                .runtime_expression => 32,
+                .literal => 33,
+                .identifier => 51,
+                .type => 35,
+                .access_attribute => 52,
+                .pointer_attribute => 45,
+                .attributed_expression => 46,
+                else => unreachable,
+            };
+        },
+        54 => {
+            return switch (node_kind) {
+                .function_parameters => 74,
+                .function_parameter => 75,
+                .access_attribute => 76,
+                else => unreachable,
+            };
+        },
+        55 => {
+            return switch (node_kind) {
+                .non_attributed_expression => 24,
+                .wrapped_expressions => 25,
+                .expression => 77,
+                .block => 27,
+                .match_expression => 29,
+                .function => 30,
+                .call => 50,
+                .runtime_expression => 32,
+                .literal => 33,
+                .identifier => 51,
+                .type => 35,
+                .access_attribute => 52,
+                .pointer_attribute => 45,
+                .attributed_expression => 46,
+                else => unreachable,
+            };
+        },
+        56 => {
+            return switch (node_kind) {
+                .expressions => 78,
+                .non_attributed_expression => 24,
+                .wrapped_expressions => 25,
+                .expression => 26,
+                .block => 27,
+                .match_expression => 29,
+                .function => 30,
+                .call => 50,
+                .runtime_expression => 32,
+                .literal => 33,
+                .identifier => 51,
+                .type => 35,
+                .access_attribute => 52,
+                .pointer_attribute => 45,
+                .attributed_expression => 46,
+                else => unreachable,
+            };
+        },
+        57 => {
+            return switch (node_kind) {
+                .expressions => 79,
+                .non_attributed_expression => 24,
+                .wrapped_expressions => 25,
+                .expression => 26,
+                .block => 27,
+                .match_expression => 29,
+                .function => 30,
+                .call => 50,
+                .runtime_expression => 32,
+                .literal => 33,
+                .identifier => 51,
+                .type => 35,
+                .access_attribute => 52,
+                .pointer_attribute => 45,
+                .attributed_expression => 46,
+                else => unreachable,
+            };
+        },
+        58 => {
+            return switch (node_kind) {
+                .non_attributed_expression => 24,
+                .wrapped_expressions => 25,
+                .expression => 80,
+                .block => 27,
+                .match_expression => 29,
+                .function => 30,
+                .call => 50,
+                .runtime_expression => 32,
+                .literal => 33,
+                .identifier => 51,
+                .type => 35,
+                .access_attribute => 52,
+                .pointer_attribute => 45,
+                .attributed_expression => 46,
+                else => unreachable,
+            };
+        },
+        59 => {
+            return switch (node_kind) {
+                .match_expression => 82,
+                else => unreachable,
+            };
+        },
+        61 => {
+            return switch (node_kind) {
+                .non_attributed_expression => 24,
+                .wrapped_expressions => 25,
+                .expression => 83,
+                .block => 27,
+                .match_expression => 29,
+                .function => 30,
+                .call => 50,
+                .runtime_expression => 32,
+                .literal => 33,
+                .identifier => 51,
+                .type => 35,
+                .access_attribute => 52,
+                .pointer_attribute => 45,
+                .attributed_expression => 46,
+                else => unreachable,
+            };
+        },
+        62 => {
+            return switch (node_kind) {
+                .expressions => 84,
+                .non_attributed_expression => 24,
+                .wrapped_expressions => 25,
+                .expression => 26,
+                .block => 27,
+                .match_expression => 29,
+                .function => 30,
+                .call => 50,
+                .runtime_expression => 32,
+                .literal => 33,
+                .identifier => 51,
+                .type => 35,
+                .access_attribute => 52,
+                .pointer_attribute => 45,
+                .attributed_expression => 46,
+                else => unreachable,
+            };
+        },
+        67 => {
+            return switch (node_kind) {
+                .expressions => 86,
+                .non_attributed_expression => 24,
+                .wrapped_expressions => 25,
+                .expression => 26,
+                .block => 27,
+                .match_expression => 29,
+                .function => 30,
+                .call => 50,
+                .runtime_expression => 32,
+                .literal => 33,
+                .identifier => 51,
+                .type => 35,
+                .access_attribute => 52,
+                .pointer_attribute => 45,
+                .attributed_expression => 46,
+                else => unreachable,
+            };
+        },
+        68 => {
+            return switch (node_kind) {
+                .type_attribute => 88,
+                else => unreachable,
+            };
+        },
+        87 => {
+            return switch (node_kind) {
+                .non_attributed_expression => 24,
+                .wrapped_expressions => 25,
+                .expression => 100,
+                .block => 27,
+                .match_expression => 29,
+                .function => 30,
+                .call => 50,
+                .runtime_expression => 32,
+                .literal => 33,
+                .identifier => 51,
+                .type => 35,
+                .access_attribute => 52,
+                .pointer_attribute => 45,
+                .attributed_expression => 46,
+                else => unreachable,
+            };
+        },
+        90 => {
+            return switch (node_kind) {
+                .function_parameter => 102,
+                .access_attribute => 76,
+                else => unreachable,
+            };
+        },
+        91 => {
+            return switch (node_kind) {
+                .function_attributes => 105,
+                .function_attribute => 106,
+                .function_external_attribute => 107,
+                .function_internal_attribute => 108,
+                else => unreachable,
+            };
+        },
+        92 => {
+            return switch (node_kind) {
+                .type_attribute => 109,
+                else => unreachable,
+            };
+        },
+        101 => {
+            return switch (node_kind) {
+                .match_cases => 112,
+                .match_case => 113,
+                else => unreachable,
+            };
+        },
+        105 => {
+            return switch (node_kind) {
+                .function_attribute => 117,
+                .function_external_attribute => 107,
+                .function_internal_attribute => 108,
+                .function_body => 118,
+                else => unreachable,
+            };
+        },
+        110 => {
+            return switch (node_kind) {
+                .type_entries => 120,
+                .type_entry => 121,
+                else => unreachable,
+            };
+        },
+        111 => {
+            return switch (node_kind) {
+                .non_attributed_expression => 24,
+                .wrapped_expressions => 25,
+                .expression => 122,
+                .block => 27,
+                .match_expression => 29,
+                .function => 30,
+                .call => 50,
+                .runtime_expression => 32,
+                .literal => 33,
+                .identifier => 51,
+                .type => 35,
+                .access_attribute => 52,
+                .pointer_attribute => 45,
+                .attributed_expression => 46,
+                else => unreachable,
+            };
+        },
+        112 => {
+            return switch (node_kind) {
+                .match_case => 124,
+                else => unreachable,
+            };
+        },
+        114 => {
+            return switch (node_kind) {
+                .expressions => 125,
+                .non_attributed_expression => 24,
+                .wrapped_expressions => 25,
+                .expression => 26,
+                .block => 27,
+                .match_expression => 29,
+                .function => 30,
+                .call => 50,
+                .runtime_expression => 32,
+                .literal => 33,
+                .identifier => 51,
+                .type => 35,
+                .access_attribute => 52,
+                .pointer_attribute => 45,
+                .attributed_expression => 46,
+                else => unreachable,
+            };
+        },
+        115 => {
+            return switch (node_kind) {
+                .expressions => 126,
+                .non_attributed_expression => 24,
+                .wrapped_expressions => 25,
+                .expression => 26,
+                .block => 27,
+                .match_expression => 29,
+                .function => 30,
+                .call => 50,
+                .runtime_expression => 32,
+                .literal => 33,
+                .identifier => 51,
+                .type => 35,
+                .access_attribute => 52,
+                .pointer_attribute => 45,
+                .attributed_expression => 46,
+                else => unreachable,
+            };
+        },
+        116 => {
+            return switch (node_kind) {
+                .expressions => 127,
+                .non_attributed_expression => 24,
+                .wrapped_expressions => 25,
+                .expression => 26,
+                .block => 27,
+                .match_expression => 29,
+                .function => 30,
+                .call => 50,
+                .runtime_expression => 32,
+                .literal => 33,
+                .identifier => 51,
+                .type => 35,
+                .access_attribute => 52,
+                .pointer_attribute => 45,
+                .attributed_expression => 46,
+                else => unreachable,
+            };
+        },
+        119 => {
+            return switch (node_kind) {
+                .type_attribute_optional => 129,
+                .type_attribute => 130,
+                else => unreachable,
+            };
+        },
+        120 => {
+            return switch (node_kind) {
+                .type_entry => 132,
+                else => unreachable,
+            };
+        },
+        133 => {
+            return switch (node_kind) {
+                .expressions => 137,
+                .non_attributed_expression => 24,
+                .wrapped_expressions => 25,
+                .expression => 26,
+                .block => 27,
+                .match_expression => 29,
+                .function => 30,
+                .call => 50,
+                .runtime_expression => 32,
+                .literal => 33,
+                .identifier => 51,
+                .type => 35,
+                .access_attribute => 52,
+                .pointer_attribute => 45,
+                .attributed_expression => 46,
+                else => unreachable,
+            };
+        },
+        else => unreachable,
     }
 }
 
-fn parseAssignmentTarget(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Assignment Target at {any}", .{Module.Position.toPosition(lexer.current())});
+pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, tokens: []Tokenizer.Token, string_pool: *StringPool, source: [:0]u8) error{ OutOfMemory, ParseFailed }!ASTNode.ASTNodeHandle {
+    self.lock.lock(io) catch unreachable;
+    defer self.lock.unlock(io);
+
+    if (self.state_stack.count() != 0) {
+        try reporter.add(io, .@"error", filename, 1, 1, "Cannot parse! Initial state stack is not empty!", .{});
+        return error.ParseFailed;
     }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Assignment Target at {any}", .{Module.Position.toPosition(lexer.current())});
-    };
-    const assignment_target_node_index = try ast_node_array.alloc();
 
-    const peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .keyword_in or _peek_token.kind == .keyword_out or _peek_token.kind == .keyword_inout) {
-            _ = lexer.next();
-            const name_token = lexer.peek();
-            if (name_token) |_name_token| {
-                if (_name_token.kind == .identifier) {
-                    _ = lexer.next();
-                    const assignment_target_node = ASTNode{
-                        .data = .{
-                            .assignment_target = .{
-                                .access_attribute = switch (_peek_token.kind) {
-                                    .keyword_in => .in,
-                                    .keyword_out => .out,
-                                    .keyword_inout => .inout,
-                                    else => unreachable,
-                                },
-                                .name = .{
-                                    .start = _name_token.start,
-                                    .end = _name_token.end,
-                                },
-                                .next = null,
-                            },
-                        },
-                        .kind = .assignment_target,
-                        .position = .toPosition(lexer.current()),
-                    };
+    if (tokens.len == 0 or tokens[tokens.len - 1].kind != .eof) {
+        try reporter.add(io, .@"error", filename, 1, 1, "Cannot parse! Invalid token array!", .{});
+        return error.ParseFailed;
+    }
 
-                    ast_node_array.set(assignment_target_node_index, assignment_target_node) catch unreachable;
-                    return assignment_target_node_index;
-                } else {
-                    // XXX Error
-                    try error_report_array.addUnexpectedTokenReport(
-                        "Identifer",
-                        .toRange(_name_token),
-                        .toPosition(_name_token),
-                    );
+    if (self.element_stack.count() != 0) {
+        try reporter.add(io, .@"error", filename, 1, 1, "Cannot parse! Not empty element stack!", .{});
+        return error.ParseFailed;
+    }
 
-                    // Skip
-                    lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
+    defer self.state_stack.clear();
+    defer self.element_stack.clear();
 
-                    ast_node_array.free(assignment_target_node_index) catch unreachable;
-                    return null;
+    try self.state_stack.push(0);
+
+    var index: usize = 0;
+
+    while (true) {
+        switch (self.state_stack.top() orelse 255) {
+            0, 1, 36 => {
+                switch (tokens[index].kind) {
+                    .l_brace => {
+                        try self.state_stack.push(1);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .l_paren => {
+                        try self.state_stack.push(2);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .underline => {
+                        try self.state_stack.push(3);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_match => {
+                        try self.state_stack.push(4);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_function => {
+                        try self.state_stack.push(5);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_type => {
+                        try self.state_stack.push(6);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_in => {
+                        try self.state_stack.push(7);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_out => {
+                        try self.state_stack.push(8);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_inout => {
+                        try self.state_stack.push(9);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_ref => {
+                        try self.state_stack.push(10);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_ptr => {
+                        try self.state_stack.push(11);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_continue => {
+                        try self.state_stack.push(12);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_break => {
+                        try self.state_stack.push(13);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_runtime => {
+                        try self.state_stack.push(14);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .identifier => {
+                        try self.state_stack.push(15);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .string => {
+                        try self.state_stack.push(16);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .integer => {
+                        try self.state_stack.push(17);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .float => {
+                        try self.state_stack.push(18);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .char => {
+                        try self.state_stack.push(19);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .macro => {
+                        try self.state_stack.push(20);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_nil => {
+                        try self.state_stack.push(21);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
                 }
-            } else {
-                // XXX Error
-                try error_report_array.addExpectedTokenReport(
-                    "Identifer",
-                    .toPosition(lexer.current()),
-                );
-
-                // Skip
-                lexer.skipUntil(&[_]Lexer.Token.Kind{ .semicolon, .r_brace });
-                ast_node_array.free(assignment_target_node_index) catch unreachable;
-                return null;
-            }
-        } else if (_peek_token.kind == .underline) {
-            _ = lexer.next();
-            const assignment_target_node = ASTNode{
-                .data = .{
-                    .assignment_target = .{
-                        .access_attribute = .none,
-                        .name = .{
-                            .start = _peek_token.start,
-                            .end = _peek_token.end,
-                        },
-                        .next = null,
+            },
+            2,
+            52,
+            53,
+            55,
+            56,
+            57,
+            58,
+            61,
+            62,
+            67,
+            87,
+            111,
+            114,
+            115,
+            116,
+            133,
+            => {
+                switch (tokens[index].kind) {
+                    .l_brace => {
+                        try self.state_stack.push(1);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
                     },
-                },
-                .kind = .assignment_target,
-                .position = .toPosition(lexer.current()),
-            };
+                    .l_paren => {
+                        try self.state_stack.push(2);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_match => {
+                        try self.state_stack.push(4);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_function => {
+                        try self.state_stack.push(5);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_type => {
+                        try self.state_stack.push(6);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_in => {
+                        try self.state_stack.push(7);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_out => {
+                        try self.state_stack.push(8);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_inout => {
+                        try self.state_stack.push(9);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_ref => {
+                        try self.state_stack.push(10);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_ptr => {
+                        try self.state_stack.push(11);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_runtime => {
+                        try self.state_stack.push(14);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .identifier => {
+                        try self.state_stack.push(48);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .string => {
+                        try self.state_stack.push(16);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .integer => {
+                        try self.state_stack.push(17);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .float => {
+                        try self.state_stack.push(18);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .char => {
+                        try self.state_stack.push(19);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .macro => {
+                        try self.state_stack.push(20);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_nil => {
+                        try self.state_stack.push(21);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            3 => {
+                // Reduce _ assignment target
+                _ = self.state_stack.pop();
+                _ = self.element_stack.pop();
 
-            ast_node_array.set(assignment_target_node_index, assignment_target_node) catch unreachable;
-            return assignment_target_node_index;
-        } else {
-            ast_node_array.free(assignment_target_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        ast_node_array.free(assignment_target_node_index) catch unreachable;
-        return null;
-    }
-}
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .assignment_target,
+                    .data = .{
+                        .assignment_target = .{
+                            .access = null,
+                            .attribute = null,
+                            .name = try string_pool.put("_"),
+                            .kind = .literal,
+                        },
+                    },
+                }));
 
-fn parseCallStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Call Statement at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Call Statement at {any}", .{Module.Position.toPosition(lexer.current())});
-    };
-    const call_statement_node_index = try ast_node_array.alloc();
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .assignment_target));
+            },
+            4 => {
+                switch (tokens[index].kind) {
+                    .l_paren => {
+                        try self.state_stack.push(53);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            5 => {
+                switch (tokens[index].kind) {
+                    .l_paren => {
+                        try self.state_stack.push(54);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            6 => {
+                switch (tokens[index].kind) {
+                    .l_paren => {
+                        try self.state_stack.push(55);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            7 => {
+                _ = self.state_stack.pop();
+                _ = self.element_stack.pop();
 
-    if (try parseCallExpression(ast_node_array, lexer, error_report_array)) |call_expression_node_index| {
-        const semicolon_token = lexer.peek();
-        if (semicolon_token) |_semicolon_token| {
-            if (_semicolon_token.kind == .semicolon) {
-                _ = lexer.next();
-                const call_statement_node = ASTNode{
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .access_attribute,
+                    .data = .{
+                        .access_attribute = .{
+                            .direction = .in,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .access_attribute));
+            },
+            8 => {
+                _ = self.state_stack.pop();
+                _ = self.element_stack.pop();
+
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .access_attribute,
+                    .data = .{
+                        .access_attribute = .{
+                            .direction = .out,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .access_attribute));
+            },
+            9 => {
+                _ = self.state_stack.pop();
+                _ = self.element_stack.pop();
+
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .access_attribute,
+                    .data = .{
+                        .access_attribute = .{
+                            .direction = .inout,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .access_attribute));
+            },
+            10 => {
+                _ = self.state_stack.pop();
+                _ = self.element_stack.pop();
+
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .pointer_attribute,
+                    .data = .{
+                        .pointer_attribute = .{
+                            .kind = .ref,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .pointer_attribute));
+            },
+            11 => {
+                _ = self.state_stack.pop();
+                _ = self.element_stack.pop();
+
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .pointer_attribute,
+                    .data = .{
+                        .pointer_attribute = .{
+                            .kind = .ptr,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .pointer_attribute));
+            },
+            12 => {
+                switch (tokens[index].kind) {
+                    .identifier => {
+                        try self.state_stack.push(56);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            13 => {
+                switch (tokens[index].kind) {
+                    .identifier => {
+                        try self.state_stack.push(57);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            14 => {
+                switch (tokens[index].kind) {
+                    .l_paren => {
+                        try self.state_stack.push(58);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            15 => {
+                switch (tokens[index].kind) {
+                    .colon => {
+                        try self.state_stack.push(59);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    else => {
+                        _ = self.state_stack.pop();
+                        const name = self.element_stack.pop();
+
+                        try self.pushASTNode(try self.pool.put(ASTNode{
+                            .kind = .identifier,
+                            .data = .{
+                                .identifier = .{
+                                    .name = try string_pool.put(source[name.?.data.token.start..name.?.data.token.end]),
+                                    .prev = null,
+                                },
+                            },
+                        }));
+
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .identifier));
+                    },
+                }
+            },
+            16 => {
+                _ = self.state_stack.pop();
+                const string = self.element_stack.pop();
+
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .literal,
+                    .data = .{
+                        .literal = .{
+                            .data = .{
+                                .string = try string_pool.put(decodeString(source, string.?.data.token, reporter, io, filename) catch |err| switch (err) {
+                                    error.DecodeFailed => {
+                                        return error.ParseFailed;
+                                    },
+                                    else => {
+                                        return err;
+                                    },
+                                }),
+                            },
+                            .kind = .string,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .literal));
+            },
+            17 => {
+                _ = self.state_stack.pop();
+                const integer = self.element_stack.pop();
+                const value = decodeInteger(source, integer.?.data.token, reporter, io, filename) catch |err| switch (err) {
+                    error.DecodeFailed => {
+                        return error.ParseFailed;
+                    },
+                    else => {
+                        return err;
+                    },
+                };
+
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .literal,
+                    .data = .{
+                        .literal = .{
+                            .data = .{
+                                .integer = value,
+                            },
+                            .kind = .integer,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .literal));
+            },
+            18 => {
+                _ = self.state_stack.pop();
+                const float = self.element_stack.pop();
+                const value = decodeFloat(source, float.?.data.token, reporter, io, filename) catch |err| switch (err) {
+                    error.DecodeFailed => {
+                        return error.ParseFailed;
+                    },
+                    else => {
+                        return err;
+                    },
+                };
+
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .literal,
+                    .data = .{
+                        .literal = .{
+                            .data = .{
+                                .float = value,
+                            },
+                            .kind = .float,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .literal));
+            },
+            19 => {
+                _ = self.state_stack.pop();
+                const char = self.element_stack.pop();
+                const value = decodeChar(source, char.?.data.token, reporter, io, filename) catch |err| switch (err) {
+                    error.DecodeFailed => {
+                        return error.ParseFailed;
+                    },
+                    else => {
+                        return err;
+                    },
+                };
+
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .literal,
+                    .data = .{
+                        .literal = .{
+                            .data = .{
+                                .char = value,
+                            },
+                            .kind = .char,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .literal));
+            },
+            20 => {
+                _ = self.state_stack.pop();
+                const string = self.element_stack.pop();
+
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .literal,
+                    .data = .{
+                        .literal = .{
+                            .data = .{
+                                .macro = try string_pool.put(decodeString(source, string.?.data.token, reporter, io, filename) catch |err| switch (err) {
+                                    error.DecodeFailed => {
+                                        return error.ParseFailed;
+                                    },
+                                    else => {
+                                        return err;
+                                    },
+                                }),
+                            },
+                            .kind = .macro,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .literal));
+            },
+            21 => {
+                _ = self.state_stack.pop();
+                _ = self.element_stack.pop();
+
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .literal,
+                    .data = .{
+                        .literal = .{
+                            .data = .{
+                                .nil = {},
+                            },
+                            .kind = .nil,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .literal));
+            },
+            22 => {
+                switch (tokens[index].kind) {
+                    .eof => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(60);
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            23 => {
+                switch (tokens[index].kind) {
+                    .comma => {
+                        try self.state_stack.push(61);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    else => {
+                        _ = self.state_stack.pop();
+                        const expression = self.element_stack.pop();
+
+                        try self.pushASTNode(try self.pool.put(ASTNode{
+                            .kind = .block_body,
+                            .data = .{
+                                .block_body = .{
+                                    .expression = expression.?.data.node,
+                                    .statements = null,
+                                },
+                            },
+                        }));
+
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .block_body));
+                    },
+                }
+            },
+
+            24 => {
+                switch (tokens[index].kind) {
+                    .l_paren => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(62);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            25, 27, 29, 30, 32, 33, 35, 50 => {
+                switch (tokens[index].kind) {
+                    .l_paren => {
+                        _ = self.state_stack.pop();
+                        const expressions = self.element_stack.pop();
+
+                        try self.pushASTNode(try self.pool.put(ASTNode{
+                            .kind = .non_attributed_expression,
+                            .data = .{
+                                .non_attributed_expressions = .{
+                                    .expressions = expressions.?.data.node,
+                                },
+                            },
+                        }));
+
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .non_attributed_expression));
+                    },
+                    else => {
+                        _ = self.state_stack.pop();
+                        const expressions = self.element_stack.pop();
+
+                        try self.pushASTNode(try self.pool.put(ASTNode{
+                            .kind = .expression,
+                            .data = .{
+                                .expression = .{
+                                    .expression = expressions.?.data.node,
+                                },
+                            },
+                        }));
+
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .expression));
+                    },
+                }
+            },
+            26 => {
+                _ = self.state_stack.pop();
+                const expression = self.element_stack.pop();
+
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .expressions,
+                    .data = .{
+                        .expressions = .{
+                            .expression = expression.?.data.node,
+                            .prev = null,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .expressions));
+            },
+            28 => {
+                _ = self.state_stack.pop();
+                const expression = self.element_stack.pop();
+
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .module,
+                    .data = .{
+                        .module = .{
+                            .body = expression.?.data.node,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .module));
+            },
+            31 => {
+                switch (tokens[index].kind) {
+                    .semicolon => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(63);
+                        index += 1;
+                    },
+                    .l_paren => {
+                        _ = self.state_stack.pop();
+                        const expressions = self.element_stack.pop();
+
+                        try self.pushASTNode(try self.pool.put(ASTNode{
+                            .kind = .non_attributed_expression,
+                            .data = .{
+                                .non_attributed_expressions = .{
+                                    .expressions = expressions.?.data.node,
+                                },
+                            },
+                        }));
+
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .non_attributed_expression));
+                    },
+                    else => {
+                        _ = self.state_stack.pop();
+                        const expressions = self.element_stack.pop();
+
+                        try self.pushASTNode(try self.pool.put(ASTNode{
+                            .kind = .expression,
+                            .data = .{
+                                .expression = .{
+                                    .expression = expressions.?.data.node,
+                                },
+                            },
+                        }));
+
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .expression));
+                    },
+                }
+            },
+            34 => {
+                switch (tokens[index].kind) {
+                    .dot => {
+                        try self.state_stack.push(64);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                    },
+                    .equal => {
+                        _ = self.state_stack.pop();
+                        const target = self.element_stack.pop();
+                        try self.pushASTNode(try self.pool.put(ASTNode{
+                            .kind = .assignment_target,
+                            .data = .{
+                                .assignment_target = .{
+                                    .access = null,
+                                    .attribute = null,
+                                    .name = target.?.data.node,
+                                    .kind = .identifier,
+                                },
+                            },
+                        }));
+
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .assignment_target));
+                    },
+                    else => {
+                        _ = self.state_stack.pop();
+                        const value = self.element_stack.pop();
+                        try self.pushASTNode(try self.pool.put(ASTNode{
+                            .kind = .literal,
+                            .data = .{
+                                .literal = .{
+                                    .data = .{
+                                        .identifier = value.?.data.node,
+                                    },
+                                    .kind = .identifier,
+                                },
+                            },
+                        }));
+
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .literal));
+                    },
+                }
+            },
+            37 => {
+                _ = self.state_stack.pop();
+                const statement = self.element_stack.pop();
+
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .statements,
+                    .data = .{
+                        .statements = .{
+                            .prev = null,
+                            .statement = statement.?.data.node,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .statements));
+            },
+            38, 39, 41, 42, 43 => {
+                _ = self.state_stack.pop();
+                const statement = self.element_stack.pop();
+
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .statement,
+                    .data = .{
+                        .statement = .{
+                            .statement = statement.?.data.node,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .statement));
+            },
+            40 => {
+                switch (tokens[index].kind) {
+                    .equal => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(67);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            44 => {
+                switch (tokens[index].kind) {
+                    .l_brace => {
+                        try self.state_stack.push(1);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    .l_paren => {
+                        try self.state_stack.push(2);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    .keyword_match => {
+                        try self.state_stack.push(4);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    .keyword_function => {
+                        try self.state_stack.push(5);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    .keyword_type => {
+                        try self.state_stack.push(6);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    .keyword_in => {
+                        try self.state_stack.push(7);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    .keyword_out => {
+                        try self.state_stack.push(8);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    .keyword_inout => {
+                        try self.state_stack.push(9);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    .keyword_ref => {
+                        try self.state_stack.push(10);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    .keyword_ptr => {
+                        try self.state_stack.push(11);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    .keyword_runtime => {
+                        try self.state_stack.push(14);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    .identifier => {
+                        try self.state_stack.push(68);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    .string => {
+                        try self.state_stack.push(16);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    .integer => {
+                        try self.state_stack.push(17);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    .float => {
+                        try self.state_stack.push(18);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    .char => {
+                        try self.state_stack.push(19);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    .macro => {
+                        try self.state_stack.push(20);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    .keyword_nil => {
+                        try self.state_stack.push(21);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            45 => {
+                switch (tokens[index].kind) {
+                    .keyword_in => {
+                        try self.state_stack.push(7);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    .keyword_out => {
+                        try self.state_stack.push(8);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    .keyword_inout => {
+                        try self.state_stack.push(9);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    .keyword_ref => {
+                        try self.state_stack.push(10);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    .keyword_ptr => {
+                        try self.state_stack.push(11);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            46 => {
+                _ = self.state_stack.pop();
+                const attributed_expression = self.element_stack.pop();
+
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .expression,
+                    .data = .{
+                        .expression = .{
+                            .expression = attributed_expression.?.data.node,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .expression));
+            },
+            47 => {
+                switch (tokens[index].kind) {
+                    .r_brace => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(71);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            48 => {
+                _ = self.state_stack.pop();
+                const name = self.element_stack.pop();
+
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .identifier,
+                    .data = .{
+                        .identifier = .{
+                            .name = try string_pool.put(decodeIdentifier(source, name.?.data.token, reporter, io, filename) catch |err| switch (err) {
+                                error.DecodeFailed => {
+                                    return error.ParseFailed;
+                                },
+                                else => {
+                                    return err;
+                                },
+                            }),
+                            .prev = null,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .identifier));
+            },
+            49 => {
+                switch (tokens[index].kind) {
+                    .comma => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(61);
+                        index += 1;
+                    },
+                    .r_paren => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(72);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            51 => {
+                switch (tokens[index].kind) {
+                    .dot => {
+                        try self.state_stack.push(64);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    else => {
+                        _ = self.state_stack.pop();
+                        const value = self.element_stack.pop();
+                        try self.pushASTNode(try self.pool.put(ASTNode{
+                            .kind = .literal,
+                            .data = .{
+                                .literal = .{
+                                    .data = .{
+                                        .identifier = value.?.data.node,
+                                    },
+                                    .kind = .identifier,
+                                },
+                            },
+                        }));
+
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .literal));
+                    },
+                }
+            },
+            54 => {
+                switch (tokens[index].kind) {
+                    .keyword_in => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(7);
+                        index += 1;
+                    },
+                    .keyword_out => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(8);
+                        index += 1;
+                    },
+                    .keyword_inout => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(9);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            59 => {
+                switch (tokens[index].kind) {
+                    .semicolon => {
+                        try self.state_stack.push(81);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    .keyword_match => {
+                        try self.state_stack.push(4);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            60 => {
+                _ = self.element_stack.pop();
+                const module = self.element_stack.pop();
+                return module.?.data.node;
+            },
+            63 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.element_stack.pop();
+                const call = self.element_stack.pop();
+
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .call_statement,
                     .data = .{
                         .call_statement = .{
-                            .call_expression = call_expression_node_index,
+                            .call = call.?.data.node,
                         },
                     },
-                    .kind = .call_statement,
-                    .position = .toPosition(lexer.current()),
-                };
+                }));
 
-                ast_node_array.set(call_statement_node_index, call_statement_node) catch unreachable;
-                return call_statement_node_index;
-            } else {
-                try error_report_array.addUnexpectedTokenReport(
-                    "';'",
-                    .toRange(_semicolon_token),
-                    .toPosition(_semicolon_token),
-                );
-
-                // Skip
-                lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-
-                releaseASTNode(ast_node_array, call_expression_node_index);
-                ast_node_array.free(call_statement_node_index) catch unreachable;
-                return null;
-            }
-        } else {
-            try error_report_array.addExpectedTokenReport(
-                "';'",
-                .toPosition(lexer.current()),
-            );
-
-            // Skip
-            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-
-            releaseASTNode(ast_node_array, call_expression_node_index);
-            ast_node_array.free(call_statement_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        ast_node_array.free(call_statement_node_index) catch unreachable;
-        return null;
-    }
-}
-
-fn parseCallExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Call Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Call Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    };
-    const call_expression_node_index = try ast_node_array.alloc();
-
-    if (try parseLiteralExpression(ast_node_array, lexer, error_report_array)) |target_node_index| {
-        var peek_token: ?Token = null;
-        var first_call_parameter_node_index: ?usize = null;
-        var current_call_parameter_node_index: ?usize = null;
-
-        peek_token = lexer.peek();
-        if (peek_token) |_peek_token| {
-            if (_peek_token.kind != .l_paren) {
-                ast_node_array.free(call_expression_node_index) catch unreachable;
-                return null;
-            } else {
-                _ = lexer.next();
-            }
-        } else {
-            ast_node_array.free(call_expression_node_index) catch unreachable;
-            return null;
-        }
-
-        while (try parseCallParameter(ast_node_array, lexer, error_report_array)) |call_parameter_node_index| {
-            if (first_call_parameter_node_index == null) {
-                first_call_parameter_node_index = call_parameter_node_index;
-            }
-
-            if (current_call_parameter_node_index) |_current_call_parameter_node_index| {
-                const current_call_parameter_node = ast_node_array.get(_current_call_parameter_node_index) catch unreachable;
-                const linked_call_parameter_node = ASTNode{
-                    .data = .{
-                        .call_parameter = .{
-                            .expression = current_call_parameter_node.data.call_parameter.expression,
-                            .next = call_parameter_node_index,
-                        },
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .call_statement));
+            },
+            64 => {
+                switch (tokens[index].kind) {
+                    .identifier => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(85);
+                        index += 1;
                     },
-                    .kind = .call_parameter,
-                    .position = .toPosition(lexer.current()),
-                };
-
-                ast_node_array.set(_current_call_parameter_node_index, linked_call_parameter_node) catch unreachable;
-            }
-            current_call_parameter_node_index = call_parameter_node_index;
-
-            peek_token = lexer.peek();
-            if (peek_token) |_peek_token| {
-                if (_peek_token.kind == .comma) {
-                    _ = lexer.next();
-                    peek_token = lexer.peek();
-                    if (peek_token) |__peek_token| {
-                        if (__peek_token.kind == .r_paren) {
-                            break;
-                        }
-                    } else {
-                        // XXX Error
-
-                        try error_report_array.addExpectedTokenReport(
-                            "Expression or ')'",
-                            .toPosition(lexer.current()),
-                        );
-
-                        // Skip
-                        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-
-                        if (first_call_parameter_node_index) |_first_call_parameter_node_index| {
-                            releaseASTNode(ast_node_array, _first_call_parameter_node_index);
-                        }
-                        ast_node_array.free(call_expression_node_index) catch unreachable;
-                        return null;
-                    }
-                } else {
-                    break;
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
                 }
-            } else {
-                // XXX Error
+            },
+            65 => {
+                switch (tokens[index].kind) {
+                    .comma => {
+                        try self.state_stack.push(61);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    else => {
+                        _ = self.state_stack.pop();
+                        _ = self.state_stack.pop();
+                        const expression = self.element_stack.pop();
+                        const statements = self.element_stack.pop();
 
-                try error_report_array.addExpectedTokenReport(
-                    "',', or ')'",
-                    .toPosition(lexer.current()),
-                );
+                        try self.pushASTNode(try self.pool.put(ASTNode{
+                            .kind = .block_body,
+                            .data = .{
+                                .block_body = .{
+                                    .expression = expression.?.data.node,
+                                    .statements = statements.?.data.node,
+                                },
+                            },
+                        }));
 
-                // Skip
-                lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-
-                if (first_call_parameter_node_index) |_first_call_parameter_node_index| {
-                    releaseASTNode(ast_node_array, _first_call_parameter_node_index);
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .block_body));
+                    },
                 }
-                ast_node_array.free(call_expression_node_index) catch unreachable;
-                return null;
-            }
-        }
+            },
+            66 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                const statment = self.element_stack.pop();
+                const statments = self.element_stack.pop();
 
-        peek_token = lexer.peek();
-        if (peek_token) |_peek_token| {
-            if (_peek_token.kind != .r_paren) {
-                // XXX Error
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .statements,
+                    .data = .{
+                        .statements = .{
+                            .prev = statments.?.data.node,
+                            .statement = statment.?.data.node,
+                        },
+                    },
+                }));
 
-                try error_report_array.addUnexpectedTokenReport(
-                    "')'",
-                    .toRange(_peek_token),
-                    .toPosition(_peek_token),
-                );
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .statements));
+            },
+            68 => {
+                switch (tokens[index].kind) {
+                    .colon => {
+                        try self.state_stack.push(87);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    else => {
+                        _ = self.state_stack.pop();
+                        const name = self.element_stack.pop();
+                        try self.pushASTNode(try self.pool.put(ASTNode{
+                            .kind = .identifier,
+                            .data = .{
+                                .identifier = .{
+                                    .name = try string_pool.put(source[name.?.data.token.start..name.?.data.token.end]),
+                                    .prev = null,
+                                },
+                            },
+                        }));
 
-                // Skip
-                lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-
-                if (first_call_parameter_node_index) |call_parameter_node_index| {
-                    releaseASTNode(ast_node_array, call_parameter_node_index);
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .identifier));
+                    },
                 }
-                ast_node_array.free(call_expression_node_index) catch unreachable;
-
-                return null;
-            } else {
-                _ = lexer.next();
-            }
-        } else {
-            // XXX Error
-            try error_report_array.addExpectedTokenReport(
-                "')'",
-                .toPosition(lexer.current()),
-            );
-
-            // Skip
-            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-
-            if (first_call_parameter_node_index) |call_parameter_node_index| {
-                releaseASTNode(ast_node_array, call_parameter_node_index);
-            }
-            ast_node_array.free(call_expression_node_index) catch unreachable;
-            return null;
-        }
-
-        const call_expression_node = ASTNode{
-            .data = .{
-                .call_expression = .{
-                    .parameter = first_call_parameter_node_index,
-                    .target = target_node_index,
-                },
             },
-            .kind = .call_expression,
-            .position = .toPosition(lexer.current()),
-        };
-
-        ast_node_array.set(call_expression_node_index, call_expression_node) catch unreachable;
-        return call_expression_node_index;
-    } else {
-        ast_node_array.free(call_expression_node_index) catch unreachable;
-        return null;
-    }
-}
-
-fn parseCallParameter(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Call Parameter at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Call Parameter at {any}", .{Module.Position.toPosition(lexer.current())});
-    };
-    const call_parameter_node_index = try ast_node_array.alloc();
-
-    if (try parseSingleExpression(ast_node_array, lexer, error_report_array)) |expression_node_index| {
-        const call_parameter_node = ASTNode{
-            .data = .{
-                .call_parameter = .{
-                    .expression = expression_node_index,
-                    .next = null,
-                },
-            },
-            .kind = .call_parameter,
-            .position = .toPosition(lexer.current()),
-        };
-        ast_node_array.set(call_parameter_node_index, call_parameter_node) catch unreachable;
-        return call_parameter_node_index;
-    }
-
-    return null;
-}
-
-fn parseExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    };
-    if (try parseMultipleExpression(ast_node_array, lexer, error_report_array)) |multiple_expression_node_index| {
-        const multiple_expression_node = ast_node_array.get(multiple_expression_node_index) catch unreachable;
-
-        if (multiple_expression_node.data.multiple_expression.next == null) {
-            const single_expression_node_index = multiple_expression_node.data.multiple_expression.expression;
-            ast_node_array.free(multiple_expression_node_index) catch unreachable;
-            return single_expression_node_index;
-        }
-
-        return multiple_expression_node_index;
-    } else {
-        return null;
-    }
-}
-
-fn parseSingleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Single Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Single Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    };
-    const expression_node_index = try ast_node_array.alloc();
-    const previous_lexer = lexer.*;
-
-    const peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .comment) {
-            if (try parseCommentedSingleExpression(ast_node_array, lexer, error_report_array)) |commented_expression_index| {
-                const expression_node = ASTNode{
-                    .kind = .expression,
-                    .data = .{
-                        .expression = .{
-                            .expression = commented_expression_index,
-                            .kind = .commented,
-                        },
-                    },
-                    .position = .toPosition(lexer.current()),
-                };
-
-                ast_node_array.set(expression_node_index, expression_node) catch unreachable;
-                return expression_node_index;
-            } else {
-                lexer.* = previous_lexer;
-            }
-        }
-    }
-
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .identifier) {
-            if (try parseLabelExpression(ast_node_array, lexer, error_report_array)) |label_expression_index| {
-                const expression_node = ASTNode{
-                    .kind = .expression,
-                    .data = .{
-                        .expression = .{
-                            .expression = label_expression_index,
-                            .kind = .label,
-                        },
-                    },
-                    .position = .toPosition(lexer.current()),
-                };
-
-                ast_node_array.set(expression_node_index, expression_node) catch unreachable;
-                return expression_node_index;
-            } else {
-                lexer.* = previous_lexer;
-            }
-        }
-        if (try parseCallExpression(ast_node_array, lexer, error_report_array)) |call_expression_index| {
-            const expression_node = ASTNode{
-                .kind = .expression,
-                .data = .{
-                    .expression = .{
-                        .expression = call_expression_index,
-                        .kind = .call,
-                    },
-                },
-                .position = .toPosition(lexer.current()),
-            };
-
-            ast_node_array.set(expression_node_index, expression_node) catch unreachable;
-            return expression_node_index;
-        } else {
-            lexer.* = previous_lexer;
-        }
-
-        if (try parseLiteralExpression(ast_node_array, lexer, error_report_array)) |literal_expression_index| {
-            const expression_node = ASTNode{
-                .kind = .expression,
-                .data = .{
-                    .expression = .{
-                        .expression = literal_expression_index,
-                        .kind = .literal,
-                    },
-                },
-                .position = .toPosition(lexer.current()),
-            };
-
-            ast_node_array.set(expression_node_index, expression_node) catch unreachable;
-            return expression_node_index;
-        } else {
-            lexer.* = previous_lexer;
-        }
-
-        if (_peek_token.kind == .keyword_match) {
-            if (try parseMatchExpression(ast_node_array, lexer, error_report_array)) |match_expression_index| {
-                const expression_node = ASTNode{
-                    .kind = .expression,
-                    .data = .{
-                        .expression = .{
-                            .expression = match_expression_index,
-                            .kind = .match,
-                        },
-                    },
-                    .position = .toPosition(lexer.current()),
-                };
-
-                ast_node_array.set(expression_node_index, expression_node) catch unreachable;
-                return expression_node_index;
-            } else {
-                lexer.* = previous_lexer;
-            }
-        }
-
-        if (_peek_token.kind == .keyword_in or _peek_token.kind == .keyword_inout or _peek_token.kind == .keyword_out or _peek_token.kind == .keyword_ptr or _peek_token.kind == .keyword_ref) {
-            if (try parseAttributedExpression(ast_node_array, lexer, error_report_array)) |attributed_expression_index| {
-                const expression_node = ASTNode{
-                    .kind = .expression,
-                    .data = .{
-                        .expression = .{
-                            .expression = attributed_expression_index,
-                            .kind = .attributed,
-                        },
-                    },
-                    .position = .toPosition(lexer.current()),
-                };
-
-                ast_node_array.set(expression_node_index, expression_node) catch unreachable;
-                return expression_node_index;
-            } else {
-                lexer.* = previous_lexer;
-            }
-        }
-
-        if (_peek_token.kind == .keyword_type) {
-            if (try parseTypeExpression(ast_node_array, lexer, error_report_array)) |type_expression_index| {
-                const expression_node = ASTNode{
-                    .kind = .expression,
-                    .data = .{
-                        .expression = .{
-                            .expression = type_expression_index,
-                            .kind = .type,
-                        },
-                    },
-                    .position = .toPosition(lexer.current()),
-                };
-
-                ast_node_array.set(expression_node_index, expression_node) catch unreachable;
-                return expression_node_index;
-            } else {
-                lexer.* = previous_lexer;
-            }
-        }
-        if (_peek_token.kind == .keyword_function) {
-            if (try parseFunctionExpression(ast_node_array, lexer, error_report_array)) |function_expression_index| {
-                const expression_node = ASTNode{
-                    .kind = .expression,
-                    .data = .{
-                        .expression = .{
-                            .expression = function_expression_index,
-                            .kind = .function,
-                        },
-                    },
-                    .position = .toPosition(lexer.current()),
-                };
-
-                ast_node_array.set(expression_node_index, expression_node) catch unreachable;
-                return expression_node_index;
-            } else {
-                lexer.* = previous_lexer;
-            }
-        }
-        if (_peek_token.kind == .l_brace) {
-            if (try parseBlockExpression(ast_node_array, lexer, error_report_array)) |block_expression_index| {
-                const expression_node = ASTNode{
-                    .kind = .expression,
-                    .data = .{
-                        .expression = .{
-                            .expression = block_expression_index,
-                            .kind = .block,
-                        },
-                    },
-                    .position = .toPosition(lexer.current()),
-                };
-
-                ast_node_array.set(expression_node_index, expression_node) catch unreachable;
-                return expression_node_index;
-            } else {
-                lexer.* = previous_lexer;
-            }
-        }
-    } else {
-        // XXX Error
-    }
-
-    ast_node_array.free(expression_node_index) catch unreachable;
-    return null;
-}
-
-fn parseMultipleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Multiple Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Multiple Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    };
-    // XXX Need error report
-    var first_expression_node_index: ?usize = null;
-    var current_expression_node_index: ?usize = null;
-    while (true) {
-        if (try parseSingleExpression(ast_node_array, lexer, error_report_array)) |expression_node_index| {
-            const multiple_expression_node_index = try ast_node_array.alloc();
-            if (first_expression_node_index == null) {
-                first_expression_node_index = multiple_expression_node_index;
-            }
-
-            if (current_expression_node_index) |_current_expression_node_index| {
-                const current_expression_node = ast_node_array.get(_current_expression_node_index) catch unreachable;
-                const linked_expression_node = ASTNode{
-                    .kind = .multiple_expression,
-                    .data = .{
-                        .multiple_expression = .{
-                            .expression = current_expression_node.data.multiple_expression.expression,
-                            .next = multiple_expression_node_index,
-                        },
-                    },
-                    .position = .toPosition(lexer.current()),
-                };
-
-                ast_node_array.set(_current_expression_node_index, linked_expression_node) catch unreachable;
-            }
-
-            current_expression_node_index = multiple_expression_node_index;
-
-            const multiple_expression_node = ASTNode{
-                .kind = .multiple_expression,
-                .data = .{
-                    .multiple_expression = .{
-                        .expression = expression_node_index,
-                        .next = null,
-                    },
-                },
-                .position = .toPosition(lexer.current()),
-            };
-            ast_node_array.set(multiple_expression_node_index, multiple_expression_node) catch unreachable;
-        }
-
-        if (lexer.peek()) |peek_token| {
-            if (peek_token.kind != .comma) {
-                break;
-            } else {
-                _ = lexer.next();
-            }
-        } else {
-            // Should this be error?
-            break;
-        }
-    }
-
-    return first_expression_node_index;
-}
-
-fn parseLiteralExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    _ = error_report_array;
-    if (enable_trace) {
-        std.log.debug("Parsing Literal Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Literal Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    };
-    const literal_expression_node_index = try ast_node_array.alloc();
-
-    const peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .string or _peek_token.kind == .char or _peek_token.kind == .identifier or _peek_token.kind == .integer or _peek_token.kind == .float or _peek_token.kind == .keyword_nil or _peek_token.kind == .macro or _peek_token.kind == .underline) {
-            _ = lexer.next();
-            const literal_expression_node = ASTNode{
-                .data = .{
-                    .literal_expression = .{
-                        .kind = switch (_peek_token.kind) {
-                            .string => .string,
-                            .char => .char,
-                            .identifier => .identifier,
-                            .integer => .integer,
-                            .float => .float,
-                            .macro => .macro,
-                            .underline => .underline,
-                            .keyword_nil => .nil,
-                            else => unreachable,
-                        },
-                        .position = .{
-                            .start = _peek_token.start,
-                            .end = _peek_token.end,
-                        },
-                    },
-                },
-                .kind = .literal_expression,
-                .position = .toPosition(lexer.current()),
-            };
-
-            ast_node_array.set(literal_expression_node_index, literal_expression_node) catch unreachable;
-            return literal_expression_node_index;
-        } else {
-            ast_node_array.free(literal_expression_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        ast_node_array.free(literal_expression_node_index) catch unreachable;
-        return null;
-    }
-}
-
-fn parseTypeExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Type Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Type Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    };
-    const type_expression_node_index = try ast_node_array.alloc();
-
-    var peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .keyword_type) {
-            _ = lexer.next();
-        } else {
-            ast_node_array.free(type_expression_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedTokenReport(
-            "'type'",
-            .toPosition(lexer.current()),
-        );
-
-        ast_node_array.free(type_expression_node_index) catch unreachable;
-        return null;
-    }
-
-    peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .l_paren) {
-            _ = lexer.next();
-        } else {
-            // XXX Error
-
-            try error_report_array.addUnexpectedTokenReport(
-                "'('",
-                .toRange(_peek_token),
-                .toPosition(_peek_token),
-            );
-
-            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-
-            ast_node_array.free(type_expression_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        // XXX Error
-
-        try error_report_array.addExpectedTokenReport(
-            "'('",
-            .toPosition(lexer.current()),
-        );
-
-        ast_node_array.free(type_expression_node_index) catch unreachable;
-        return null;
-    }
-
-    var expression_node_index: ?usize = null;
-    if (try parseExpression(ast_node_array, lexer, error_report_array)) |_expression_node_index| {
-        expression_node_index = _expression_node_index;
-    } else {
-        // XXX Error
-
-        try error_report_array.addExpectedExpressionReport(.toPosition(lexer.current()));
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-
-        ast_node_array.free(type_expression_node_index) catch unreachable;
-        return null;
-    }
-
-    peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .r_paren) {
-            _ = lexer.next();
-        } else {
-            // XXX Error
-            try error_report_array.addUnexpectedTokenReport(
-                "')'",
-                .toRange(_peek_token),
-
-                .toPosition(_peek_token),
-            );
-
-            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-
-            releaseASTNode(ast_node_array, expression_node_index.?);
-            ast_node_array.free(type_expression_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedTokenReport(
-            "')'",
-            .toPosition(lexer.current()),
-        );
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-
-        releaseASTNode(ast_node_array, expression_node_index.?);
-
-        ast_node_array.free(type_expression_node_index) catch unreachable;
-        return null;
-    }
-
-    peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .l_brace) {
-            _ = lexer.next();
-        } else {
-            // XXX Error
-
-            try error_report_array.addUnexpectedTokenReport(
-                "'{'",
-                .toRange(_peek_token),
-                .toPosition(_peek_token),
-            );
-
-            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-            releaseASTNode(ast_node_array, expression_node_index.?);
-
-            ast_node_array.free(type_expression_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedTokenReport(
-            "'{'",
-            .toPosition(lexer.current()),
-        );
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-
-        releaseASTNode(ast_node_array, expression_node_index.?);
-
-        ast_node_array.free(type_expression_node_index) catch unreachable;
-        return null;
-    }
-
-    var first_type_entry_node_index: ?usize = null;
-    var current_type_entry_node_index: ?usize = null;
-
-    while (try parseTypeEntry(ast_node_array, lexer, error_report_array)) |type_entry_node_index| {
-        if (first_type_entry_node_index == null) {
-            first_type_entry_node_index = type_entry_node_index;
-        }
-
-        if (current_type_entry_node_index) |_current_type_entry_node_index| {
-            const current_type_entry_node = ast_node_array.get(_current_type_entry_node_index) catch unreachable;
-            const linked_type_entry_node = ASTNode{
-                .data = .{
-                    .type_entry = .{
-                        .next = type_entry_node_index,
-                        .expression = current_type_entry_node.data.type_entry.expression,
-                        .name = current_type_entry_node.data.type_entry.name,
-                    },
-                },
-                .kind = .type_entry,
-                .position = .toPosition(lexer.current()),
-            };
-            ast_node_array.set(_current_type_entry_node_index, linked_type_entry_node) catch unreachable;
-        }
-
-        current_type_entry_node_index = type_entry_node_index;
-
-        peek_token = lexer.peek();
-        if (peek_token) |_peek_token| {
-            if (_peek_token.kind == .semicolon) {
-                _ = lexer.next();
-                peek_token = lexer.peek();
-                if (peek_token) |__peek_token| {
-                    if (__peek_token.kind == .r_brace) {
-                        break;
-                    }
-                } else {
-                    try error_report_array.addExpectedTokenReport("TypeEntry or '}'", .toPosition(lexer.current()));
-
-                    lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-
-                    releaseASTNode(ast_node_array, expression_node_index.?);
-                    ast_node_array.free(type_expression_node_index) catch unreachable;
-                    return null;
-                }
-            } else {
-                break;
-            }
-        } else {
-            try error_report_array.addExpectedTokenReport("';', or '}'", .toPosition(lexer.current()));
-
-            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-
-            releaseASTNode(ast_node_array, expression_node_index.?);
-            ast_node_array.free(type_expression_node_index) catch unreachable;
-            return null;
-        }
-    }
-
-    peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .r_brace) {
-            _ = lexer.next();
-        } else {
-            // XXX Error
-            try error_report_array.addUnexpectedTokenReport(
-                "';' or '}'",
-                .toRange(_peek_token),
-                .toPosition(_peek_token),
-            );
-
-            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-            ast_node_array.free(type_expression_node_index) catch unreachable;
-            if (first_type_entry_node_index) |_first_type_entry_node_index| {
-                releaseASTNode(ast_node_array, _first_type_entry_node_index);
-            }
-            return null;
-        }
-    } else {
-        // XXX Error
-
-        try error_report_array.addExpectedTokenReport(
-            "'}'",
-            .toPosition(lexer.current()),
-        );
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-        ast_node_array.free(type_expression_node_index) catch unreachable;
-        if (first_type_entry_node_index) |_first_type_entry_node_index| {
-            releaseASTNode(ast_node_array, _first_type_entry_node_index);
-        }
-        ast_node_array.free(type_expression_node_index) catch unreachable;
-        return null;
-    }
-
-    const type_expression_node = ASTNode{
-        .data = .{
-            .type_expression = .{
-                .entry = first_type_entry_node_index,
-                .kind = expression_node_index.?,
-            },
-        },
-        .kind = .type_expression,
-        .position = .toPosition(lexer.current()),
-    };
-    ast_node_array.set(type_expression_node_index, type_expression_node) catch unreachable;
-    return type_expression_node_index;
-}
-
-fn parseTypeEntry(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Type Entry at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Type Entry at {any}", .{Module.Position.toPosition(lexer.current())});
-    };
-    const type_entry_node_index = try ast_node_array.alloc();
-
-    var name_token: Token = undefined;
-    var peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .identifier) {
-            name_token = _peek_token;
-            _ = lexer.next();
-        } else {
-            ast_node_array.free(type_entry_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedTokenReport(
-            "Identifer, or '}'",
-            .toPosition(lexer.current()),
-        );
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-        ast_node_array.free(type_entry_node_index) catch unreachable;
-        return null;
-    }
-
-    peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .colon) {
-            _ = lexer.next();
-        } else {
-            const type_entry_node = ASTNode{
-                .data = .{
-                    .type_entry = .{
-                        .expression = null,
-                        .name = .{
-                            .start = name_token.start,
-                            .end = name_token.end,
-                        },
-                        .next = null,
-                    },
-                },
-                .kind = .type_entry,
-                .position = .toPosition(lexer.current()),
-            };
-
-            ast_node_array.set(type_entry_node_index, type_entry_node) catch unreachable;
-
-            return type_entry_node_index;
-        }
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedTokenReport(
-            "':', or '}'",
-
-            .toPosition(lexer.current()),
-        );
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-
-        ast_node_array.free(type_entry_node_index) catch unreachable;
-        return null;
-    }
-
-    var expression_node_index: ?usize = undefined;
-    if (try parseExpression(ast_node_array, lexer, error_report_array)) |_expression_node_index| {
-        expression_node_index = _expression_node_index;
-    }
-    const type_entry_node = ASTNode{
-        .data = .{
-            .type_entry = .{
-                .expression = expression_node_index,
-                .name = .{
-                    .start = name_token.start,
-                    .end = name_token.end,
-                },
-                .next = null,
-            },
-        },
-        .kind = .type_entry,
-        .position = .toPosition(lexer.current()),
-    };
-
-    ast_node_array.set(type_entry_node_index, type_entry_node) catch unreachable;
-
-    return type_entry_node_index;
-}
-
-fn parseFunctionParameter(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Function Parameter at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Function Parameter at {any}", .{Module.Position.toPosition(lexer.current())});
-    };
-    const function_parameter_node_index = try ast_node_array.alloc();
-
-    var peek_token = lexer.peek();
-    var attribute_token: Token = undefined;
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .keyword_in or _peek_token.kind == .keyword_inout or _peek_token.kind == .keyword_out) {
-            attribute_token = _peek_token;
-            _ = lexer.next();
-        } else {
-            ast_node_array.free(function_parameter_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedTokenReport("')'", .toPosition(lexer.current()));
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-
-        ast_node_array.free(function_parameter_node_index) catch unreachable;
-        return null;
-    }
-
-    peek_token = lexer.peek();
-    var name_token: Token = undefined;
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .identifier) {
-            name_token = _peek_token;
-            _ = lexer.next();
-        } else {
-            // XXX Error
-            try error_report_array.addUnexpectedTokenReport("Identifer", .toRange(_peek_token), .toPosition(_peek_token));
-
-            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-            ast_node_array.free(function_parameter_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedTokenReport(
-            "Identifier",
-            .toPosition(lexer.current()),
-        );
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-        ast_node_array.free(function_parameter_node_index) catch unreachable;
-        return null;
-    }
-
-    peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .colon) {
-            _ = lexer.next();
-        } else {
-            // XXX Error
-            try error_report_array.addUnexpectedTokenReport(
-                "':'",
-                .toRange(_peek_token),
-                .toPosition(_peek_token),
-            );
-
-            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-            ast_node_array.free(function_parameter_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedTokenReport("':", .toPosition(lexer.current()));
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-
-        ast_node_array.free(function_parameter_node_index) catch unreachable;
-        return null;
-    }
-
-    if (try parseSingleExpression(ast_node_array, lexer, error_report_array)) |expression_node_index| {
-        const function_parameter_node = ASTNode{
-            .data = .{
-                .function_parameter = .{
-                    .expression = expression_node_index,
-                    .access_attribute = switch (attribute_token.kind) {
-                        .keyword_in => .in,
-                        .keyword_out => .out,
-                        .keyword_inout => .inout,
-                        else => unreachable,
-                    },
-                    .name = .{
-                        .start = name_token.start,
-                        .end = name_token.end,
-                    },
-                    .next = null,
-                },
-            },
-            .kind = .function_parameter,
-            .position = .toPosition(lexer.current()),
-        };
-        ast_node_array.set(function_parameter_node_index, function_parameter_node) catch unreachable;
-        return function_parameter_node_index;
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedExpressionReport(
-            .toPosition(lexer.current()),
-        );
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-        ast_node_array.free(function_parameter_node_index) catch unreachable;
-        return null;
-    }
-}
-
-fn parseFunctionExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Function Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Function Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    };
-    const function_expression_node_index = try ast_node_array.alloc();
-
-    var peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .keyword_function) {
-            _ = lexer.next();
-        } else {
-            ast_node_array.free(function_expression_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedTokenReport("'function'", .toPosition(lexer.current()));
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-        ast_node_array.free(function_expression_node_index) catch unreachable;
-        return null;
-    }
-
-    peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .l_paren) {
-            _ = lexer.next();
-        } else {
-            // XXX Error
-            try error_report_array.addUnexpectedTokenReport(
-                "'('",
-                .toRange(_peek_token),
-                .toPosition(_peek_token),
-            );
-
-            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-            ast_node_array.free(function_expression_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedTokenReport(
-            "'('",
-            .toPosition(lexer.current()),
-        );
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-        ast_node_array.free(function_expression_node_index) catch unreachable;
-        return null;
-    }
-
-    var first_function_parameter_node_index: ?usize = null;
-    var current_function_parameter_node_index: ?usize = null;
-
-    while (try parseFunctionParameter(ast_node_array, lexer, error_report_array)) |function_parameter_node_index| {
-        if (first_function_parameter_node_index == null) {
-            first_function_parameter_node_index = function_parameter_node_index;
-        }
-
-        if (current_function_parameter_node_index) |_current_function_parameter_node_index| {
-            const current_function_parameter_node = ast_node_array.get(_current_function_parameter_node_index) catch unreachable;
-            const linked_function_parameter_node = ASTNode{
-                .data = .{
-                    .function_parameter = .{
-                        .access_attribute = current_function_parameter_node.data.function_parameter.access_attribute,
-                        .expression = current_function_parameter_node.data.function_parameter.expression,
-                        .name = current_function_parameter_node.data.function_parameter.name,
-                        .next = function_parameter_node_index,
-                    },
-                },
-                .kind = .function_parameter,
-                .position = .toPosition(lexer.current()),
-            };
-
-            ast_node_array.set(_current_function_parameter_node_index, linked_function_parameter_node) catch unreachable;
-        }
-
-        current_function_parameter_node_index = function_parameter_node_index;
-
-        peek_token = lexer.peek();
-        if (peek_token) |_peek_token| {
-            if (_peek_token.kind == .comma) {
-                _ = lexer.next();
-                peek_token = lexer.peek();
-                if (peek_token) |__peek_token| {
-                    if (__peek_token.kind == .r_paren) {
-                        break;
-                    }
-                } else {
-                    // XXX Error
-                    try error_report_array.addExpectedTokenReport(
-                        "Function Parameter Definition or ')'",
-                        .toPosition(lexer.current()),
-                    );
-
-                    lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-                    ast_node_array.free(function_expression_node_index) catch unreachable;
-                    return null;
-                }
-            } else {
-                break;
-            }
-        } else {
-            // XXX Error
-            try error_report_array.addExpectedTokenReport(
-                "',', or ')'",
-                .toPosition(lexer.current()),
-            );
-
-            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-            ast_node_array.free(function_expression_node_index) catch unreachable;
-            return null;
-        }
-    }
-
-    peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .r_paren) {
-            _ = lexer.next();
-        } else {
-            // XXX Error
-            try error_report_array.addUnexpectedTokenReport(
-                "')'",
-                .toRange(_peek_token),
-                .toPosition(_peek_token),
-            );
-
-            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-
-            ast_node_array.free(function_expression_node_index) catch unreachable;
-            if (first_function_parameter_node_index) |_first_function_parameter_node_index| {
-                releaseASTNode(ast_node_array, _first_function_parameter_node_index);
-            }
-            return null;
-        }
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedTokenReport("')'", .toPosition(lexer.current()));
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-        ast_node_array.free(function_expression_node_index) catch unreachable;
-        if (first_function_parameter_node_index) |_first_function_parameter_node_index| {
-            releaseASTNode(ast_node_array, _first_function_parameter_node_index);
-        }
-        return null;
-    }
-
-    var first_function_attribute_node_index: ?usize = null;
-    var current_function_attribute_node_index: ?usize = null;
-    while (try parseFunctionAttribute(ast_node_array, lexer, error_report_array)) |function_attribute_node_index| {
-        if (first_function_attribute_node_index == null) {
-            first_function_attribute_node_index = function_attribute_node_index;
-        }
-
-        if (current_function_attribute_node_index) |_current_function_attribute_node_index| {
-            const current_function_attribute_node = ast_node_array.get(_current_function_attribute_node_index) catch unreachable;
-            const linked_function_attribute_node = ASTNode{
-                .data = .{
-                    .function_attribute = .{
-                        .expression = current_function_attribute_node.data.function_attribute.expression,
-                        .kind = current_function_attribute_node.data.function_attribute.kind,
-                        .next = function_attribute_node_index,
-                    },
-                },
-                .kind = .function_attribute,
-                .position = .toPosition(lexer.current()),
-            };
-
-            ast_node_array.set(_current_function_attribute_node_index, linked_function_attribute_node) catch unreachable;
-        }
-
-        current_function_attribute_node_index = function_attribute_node_index;
-    }
-
-    const expression = try parseExpression(ast_node_array, lexer, error_report_array);
-
-    const function_expression_node = ASTNode{
-        .data = .{
-            .function_expression = .{
-                .expression = expression,
-                .parameter = first_function_parameter_node_index,
-                .attribute = first_function_attribute_node_index,
-            },
-        },
-        .kind = .function_expression,
-        .position = .toPosition(lexer.current()),
-    };
-
-    ast_node_array.set(function_expression_node_index, function_expression_node) catch unreachable;
-    return function_expression_node_index;
-}
-
-fn parseFunctionAttribute(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Function Attribute at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Function Attribute at {any}", .{Module.Position.toPosition(lexer.current())});
-    };
-    const function_attribute_node_index = try ast_node_array.alloc();
-
-    var peek_token = lexer.peek();
-    var attribute_kind_token: Token = undefined;
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind != .keyword_internal and _peek_token.kind != .keyword_external) {
-            ast_node_array.free(function_attribute_node_index) catch unreachable;
-            return null;
-        }
-        attribute_kind_token = lexer.next();
-    } else {
-        ast_node_array.free(function_attribute_node_index) catch unreachable;
-        return null;
-    }
-
-    peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind != .l_paren) {
-            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-            try error_report_array.addUnexpectedTokenReport("'('", .toRange(_peek_token), .toPosition(_peek_token));
-            ast_node_array.free(function_attribute_node_index) catch unreachable;
-            return null;
-        }
-        _ = lexer.next();
-    } else {
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-        try error_report_array.addExpectedTokenReport("'('", .toPosition(lexer.current()));
-        ast_node_array.free(function_attribute_node_index) catch unreachable;
-        return null;
-    }
-
-    const expression = try parseSingleExpression(ast_node_array, lexer, error_report_array);
-
-    peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind != .r_paren) {
-            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-            try error_report_array.addUnexpectedTokenReport("'('", .toRange(_peek_token), .toPosition(_peek_token));
-            ast_node_array.free(function_attribute_node_index) catch unreachable;
-            return null;
-        }
-        _ = lexer.next();
-    } else {
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-        try error_report_array.addExpectedTokenReport("'('", .toPosition(lexer.current()));
-        ast_node_array.free(function_attribute_node_index) catch unreachable;
-        return null;
-    }
-
-    const function_attribute_node = ASTNode{
-        .data = .{
-            .function_attribute = .{
-                .expression = expression,
-                .kind = switch (attribute_kind_token.kind) {
-                    .keyword_internal => .internal,
-                    .keyword_external => .external,
-                    else => unreachable,
-                },
-                .next = null,
-            },
-        },
-        .kind = .function_attribute,
-        .position = .toPosition(lexer.current()),
-    };
-
-    ast_node_array.set(function_attribute_node_index, function_attribute_node) catch unreachable;
-    return function_attribute_node_index;
-}
-
-fn parseLabelExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Label Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Label Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    };
-    const label_expression_node_index = try ast_node_array.alloc();
-
-    var label_expression: usize = undefined;
-    if (try parseLiteralExpression(ast_node_array, lexer, error_report_array)) |_label_expression| {
-        label_expression = _label_expression;
-    } else {
-        ast_node_array.free(label_expression_node_index) catch unreachable;
-        return null;
-    }
-
-    const peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .colon) {
-            _ = lexer.next();
-        } else {
-            ast_node_array.free(label_expression_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        ast_node_array.free(label_expression_node_index) catch unreachable;
-        return null;
-    }
-
-    if (try parseExpression(ast_node_array, lexer, error_report_array)) |expression| {
-        const label_expression_node = ASTNode{
-            .data = .{
-                .label_expression = .{
-                    .expression = expression,
-                    .label = label_expression,
-                },
-            },
-            .kind = .label_expression,
-            .position = .toPosition(lexer.current()),
-        };
-        ast_node_array.set(label_expression_node_index, label_expression_node) catch unreachable;
-        return label_expression_node_index;
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedExpressionReport(.toPosition(lexer.current()));
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-        ast_node_array.free(label_expression_node_index) catch unreachable;
-        return null;
-    }
-}
-
-fn parseMatchExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Match Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Match Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    };
-    const match_expression_node_index = try ast_node_array.alloc();
-
-    var peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .keyword_match) {
-            _ = lexer.next();
-        } else {
-            ast_node_array.free(match_expression_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedTokenReport("'match'", .toPosition(lexer.current()));
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-        ast_node_array.free(match_expression_node_index) catch unreachable;
-        return null;
-    }
-
-    peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .l_paren) {
-            _ = lexer.next();
-        } else {
-            // XXX Error
-            try error_report_array.addUnexpectedTokenReport("'('", .toRange(_peek_token), .toPosition(_peek_token));
-
-            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-            ast_node_array.free(match_expression_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedTokenReport("'('", .toPosition(lexer.current()));
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-        ast_node_array.free(match_expression_node_index) catch unreachable;
-        return null;
-    }
-
-    var expression: usize = undefined;
-    if (try parseExpression(ast_node_array, lexer, error_report_array)) |_expression| {
-        expression = _expression;
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedExpressionReport(.toPosition(lexer.current()));
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-        ast_node_array.free(match_expression_node_index) catch unreachable;
-        return null;
-    }
-
-    peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .r_paren) {
-            _ = lexer.next();
-        } else {
-            // XXX Error
-            try error_report_array.addUnexpectedTokenReport("')'", .toRange(_peek_token), .toPosition(_peek_token));
-
-            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-            ast_node_array.free(match_expression_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedTokenReport("')'", .toPosition(lexer.current()));
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-        ast_node_array.free(match_expression_node_index) catch unreachable;
-        return null;
-    }
-
-    peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .l_brace) {
-            _ = lexer.next();
-        } else {
-            // XXX Error
-            try error_report_array.addUnexpectedTokenReport("'{'", .toRange(_peek_token), .toPosition(_peek_token));
-
-            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-            ast_node_array.free(match_expression_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedTokenReport("'{'", .toPosition(lexer.current()));
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-        ast_node_array.free(match_expression_node_index) catch unreachable;
-        return null;
-    }
-
-    var first_match_case_node_index: ?usize = null;
-    var current_match_case_node_index: ?usize = null;
-    while (try parseMatchCase(ast_node_array, lexer, error_report_array)) |match_case_node_index| {
-        if (first_match_case_node_index == null) {
-            first_match_case_node_index = match_case_node_index;
-        }
-
-        if (current_match_case_node_index) |_current_match_case_node_index| {
-            const current_match_case_node = ast_node_array.get(_current_match_case_node_index) catch unreachable;
-            const linked_match_case_node = ASTNode{
-                .data = .{
-                    .match_case = .{
-                        .expression = current_match_case_node.data.match_case.expression,
-                        .next = match_case_node_index,
-                    },
-                },
-                .kind = .match_case,
-                .position = .toPosition(lexer.current()),
-            };
-
-            ast_node_array.set(_current_match_case_node_index, linked_match_case_node) catch unreachable;
-        }
-
-        current_match_case_node_index = match_case_node_index;
-
-        peek_token = lexer.peek();
-        if (peek_token) |_peek_token| {
-            if (_peek_token.kind != .semicolon) {
-                break;
-            } else {
-                _ = lexer.next();
-            }
-        } else {
-            // XXX Error
-            try error_report_array.addExpectedTokenReport(";', or '}'", .toPosition(lexer.current()));
-
-            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-            ast_node_array.free(match_expression_node_index) catch unreachable;
-            return null;
-        }
-    }
-
-    peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .r_brace) {
-            _ = lexer.next();
-        } else {
-            // XXX Error
-            try error_report_array.addUnexpectedTokenReport("'}'", .toRange(_peek_token), .toPosition(_peek_token));
-
-            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-            if (first_match_case_node_index) |_first_match_case_node_index| {
-                releaseASTNode(ast_node_array, _first_match_case_node_index);
-            }
-            ast_node_array.free(match_expression_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedTokenReport("'}'", .toPosition(lexer.current()));
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-        if (first_match_case_node_index) |_first_match_case_node_index| {
-            releaseASTNode(ast_node_array, _first_match_case_node_index);
-        }
-        ast_node_array.free(match_expression_node_index) catch unreachable;
-        return null;
-    }
-
-    const match_expression_node = ASTNode{
-        .data = .{
-            .match_expression = .{
-                .case = first_match_case_node_index,
-                .expression = expression,
-            },
-        },
-        .kind = .match_expression,
-        .position = .toPosition(lexer.current()),
-    };
-
-    ast_node_array.set(match_expression_node_index, match_expression_node) catch unreachable;
-    return match_expression_node_index;
-}
-
-fn parseMatchCase(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Match Case at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Match Case at {any}", .{Module.Position.toPosition(lexer.current())});
-    };
-    const match_case_node_index = try ast_node_array.alloc();
-
-    const peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind == .keyword_case) {
-            _ = lexer.next();
-        } else if (_peek_token.kind == .r_brace) {
-            ast_node_array.free(match_case_node_index) catch unreachable;
-            return null;
-        } else {
-            // XXX Error
-            try error_report_array.addUnexpectedTokenReport("'case'", .toRange(_peek_token), .toPosition(_peek_token));
-
-            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-            ast_node_array.free(match_case_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedTokenReport("'case'", .toPosition(lexer.current()));
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-        ast_node_array.free(match_case_node_index) catch unreachable;
-        return null;
-    }
-
-    if (try parseLabelExpression(ast_node_array, lexer, error_report_array)) |label_expression| {
-        const match_case_node = ASTNode{
-            .data = .{
-                .match_case = .{
-                    .expression = label_expression,
-                    .next = null,
-                },
-            },
-            .kind = .match_case,
-            .position = .toPosition(lexer.current()),
-        };
-
-        ast_node_array.set(match_case_node_index, match_case_node) catch unreachable;
-        return match_case_node_index;
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedTokenReport("Label", .toPosition(lexer.current()));
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-        ast_node_array.free(match_case_node_index) catch unreachable;
-        return null;
-    }
-}
-
-fn parseAttributedExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Attributed Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Attributed Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    };
-    const attributed_expression_node_index = try ast_node_array.alloc();
-
-    if (lexer.peek()) |peek_token| {
-        if (peek_token.kind == .keyword_in or peek_token.kind == .keyword_out or peek_token.kind == .keyword_inout or peek_token.kind == .keyword_ptr or peek_token.kind == .keyword_ref) {
-            _ = lexer.next();
-
-            if (try parseExpression(ast_node_array, lexer, error_report_array)) |expression| {
-                const attributed_expression_node = ASTNode{
+            69, 70 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                const expression = self.element_stack.pop();
+                const attribute = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .attributed_expression,
                     .data = .{
                         .attributed_expression = .{
-                            .expression = expression,
-                            .kind = switch (peek_token.kind) {
-                                .keyword_in => .in,
-                                .keyword_out => .out,
-                                .keyword_inout => .inout,
-                                .keyword_ptr => .ptr,
-                                .keyword_ref => .ref,
-                                else => unreachable,
-                            },
+                            .attribute = attribute.?.data.node,
+                            .expression = expression.?.data.node,
                         },
                     },
-                    .kind = .attributed_expression,
-                    .position = .toPosition(lexer.current()),
-                };
+                }));
 
-                ast_node_array.set(attributed_expression_node_index, attributed_expression_node) catch unreachable;
-                return attributed_expression_node_index;
-            }
-        } else {
-            ast_node_array.free(attributed_expression_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedTokenReport("'in', 'out', 'inout', 'nil', 'ptr', 'ref', Identifier, '_'", .toPosition(lexer.current()));
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-        ast_node_array.free(attributed_expression_node_index) catch unreachable;
-        return null;
-    }
-
-    ast_node_array.free(attributed_expression_node_index) catch unreachable;
-    return null;
-}
-
-fn parseBreakStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Break Statement at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Break Statement at {any}", .{Module.Position.toPosition(lexer.current())});
-    };
-    const break_statement_node_index = try ast_node_array.alloc();
-
-    if (lexer.peek()) |peek_token| {
-        if (peek_token.kind == .keyword_break) {
-            _ = lexer.next();
-        } else {
-            ast_node_array.free(break_statement_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedTokenReport("'break'", .toPosition(lexer.current()));
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-        ast_node_array.free(break_statement_node_index) catch unreachable;
-        return null;
-    }
-
-    const target_token: ?Token = lexer.peek();
-    if (target_token) |_target_token| {
-        if (_target_token.kind == .identifier) {
-            _ = lexer.next();
-            if (try parseExpression(ast_node_array, lexer, error_report_array)) |expression| {
-                if (lexer.peek()) |peek_token| {
-                    if (peek_token.kind != .semicolon) {
-                        // XXX Error
-                        try error_report_array.addUnexpectedTokenReport("')'", .toRange(peek_token), .toPosition(peek_token));
-
-                        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-                        releaseASTNode(ast_node_array, expression);
-                        ast_node_array.free(break_statement_node_index) catch unreachable;
-                        return null;
-                    } else {
-                        _ = lexer.next();
-                    }
-                } else {
-                    // XXX Error
-                    try error_report_array.addExpectedTokenReport("';'", .toPosition(lexer.current()));
-
-                    lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-                    releaseASTNode(ast_node_array, expression);
-                    ast_node_array.free(break_statement_node_index) catch unreachable;
-                    return null;
-                }
-
-                const break_statement_node = ASTNode{
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .attributed_expression));
+            },
+            71 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.element_stack.pop();
+                const body = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .block,
                     .data = .{
-                        .break_statement = .{
-                            .expression = expression,
-                            .name = .{
-                                .start = _target_token.start,
-                                .end = _target_token.end,
-                            },
+                        .block = .{
+                            .body = body.?.data.node,
                         },
                     },
-                    .kind = .break_statement,
-                    .position = .toPosition(lexer.current()),
-                };
-                ast_node_array.set(break_statement_node_index, break_statement_node) catch unreachable;
-                return break_statement_node_index;
-            } else {
-                // XXX Error
-                try error_report_array.addExpectedExpressionReport(.toPosition(lexer.current()));
+                }));
 
-                lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-                ast_node_array.free(break_statement_node_index) catch unreachable;
-                return null;
-            }
-        } else {
-            // XXX Error
-            try error_report_array.addUnexpectedTokenReport("Identifier", .toRange(_target_token), .toPosition(_target_token));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .block));
+            },
+            72 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.element_stack.pop();
+                const expressions = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .wrapped_expressions,
+                    .data = .{
+                        .wrapped_expressions = .{
+                            .expressions = expressions.?.data.node,
+                        },
+                    },
+                }));
 
-            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-            ast_node_array.free(break_statement_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedTokenReport("'break'", .toPosition(lexer.current()));
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-        ast_node_array.free(break_statement_node_index) catch unreachable;
-        return null;
-    }
-}
-
-fn parseContinueStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Continue Statement at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Continue Statement at {any}", .{Module.Position.toPosition(lexer.current())});
-    };
-    const continue_statement_node_index = try ast_node_array.alloc();
-
-    if (lexer.peek()) |peek_token| {
-        if (peek_token.kind == .keyword_continue) {
-            _ = lexer.next();
-        } else {
-            ast_node_array.free(continue_statement_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedTokenReport("'continue'", .toPosition(lexer.current()));
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-        ast_node_array.free(continue_statement_node_index) catch unreachable;
-        return null;
-    }
-
-    const target_token: ?Token = lexer.peek();
-    if (target_token) |_target_token| {
-        if (_target_token.kind == .identifier) {
-            _ = lexer.next();
-            if (try parseExpression(ast_node_array, lexer, error_report_array)) |expression| {
-                if (lexer.peek()) |peek_token| {
-                    if (peek_token.kind != .semicolon) {
-                        // XXX Error
-                        try error_report_array.addUnexpectedTokenReport("';'", .toRange(peek_token), .toPosition(peek_token));
-
-                        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-                        releaseASTNode(ast_node_array, expression);
-                        ast_node_array.free(continue_statement_node_index) catch unreachable;
-                        return null;
-                    } else {
-                        _ = lexer.next();
-                    }
-                } else {
-                    // XXX Error
-                    try error_report_array.addExpectedTokenReport("';'", .toPosition(lexer.current()));
-
-                    lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-                    releaseASTNode(ast_node_array, expression);
-                    ast_node_array.free(continue_statement_node_index) catch unreachable;
-                    return null;
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .wrapped_expressions));
+            },
+            73 => {
+                switch (tokens[index].kind) {
+                    .r_paren => {
+                        try self.state_stack.push(89);
+                        try self.pushToken(tokens[index]);
+                        index += 1;
+                        continue;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
                 }
+            },
+            74 => {
+                switch (tokens[index].kind) {
+                    .comma => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(90);
+                        index += 1;
+                    },
+                    .r_paren => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(91);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            75 => {
+                _ = self.state_stack.pop();
+                const parameter = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .function_parameters,
+                    .data = .{
+                        .function_parameters = .{
+                            .parameter = parameter.?.data.node,
+                            .prev = null,
+                        },
+                    },
+                }));
 
-                const continue_statement_node = ASTNode{
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .function_parameters));
+            },
+            76 => {
+                switch (tokens[index].kind) {
+                    .identifier => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(92);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            77 => {
+                switch (tokens[index].kind) {
+                    .r_paren => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(93);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            78 => {
+                switch (tokens[index].kind) {
+                    .comma => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(61);
+                        index += 1;
+                    },
+                    .semicolon => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(94);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            79 => {
+                switch (tokens[index].kind) {
+                    .comma => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(61);
+                        index += 1;
+                    },
+                    .semicolon => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(95);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            80 => {
+                switch (tokens[index].kind) {
+                    .r_paren => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(96);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            81 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                const name = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .label_statement,
+                    .data = .{
+                        .label_statement = .{
+                            .expression = null,
+                            .name = try string_pool.put(decodeIdentifier(source, name.?.data.token, reporter, io, filename) catch |err| switch (err) {
+                                error.DecodeFailed => {
+                                    return error.ParseFailed;
+                                },
+                                else => {
+                                    return err;
+                                },
+                            }),
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .label_statement));
+            },
+            82 => {
+                switch (tokens[index].kind) {
+                    .semicolon => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(97);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            83 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                const expression = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                const expressions = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .expressions,
+                    .data = .{
+                        .expressions = .{
+                            .expression = expression.?.data.node,
+                            .prev = expressions.?.data.node,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .expressions));
+            },
+            84 => {
+                switch (tokens[index].kind) {
+                    .comma => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(61);
+                        index += 1;
+                    },
+                    .r_paren => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(98);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            85 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                const identifier = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                const identifiers = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .identifier,
+                    .data = .{
+                        .identifier = .{
+                            .name = try string_pool.put(source[identifier.?.data.token.start..identifier.?.data.token.end]),
+                            .prev = identifiers.?.data.node,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .identifier));
+            },
+            86 => {
+                switch (tokens[index].kind) {
+                    .comma => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(61);
+                        index += 1;
+                    },
+                    .semicolon => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(99);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            88 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                const attribute = self.element_stack.pop();
+                const name = self.element_stack.pop();
+                const access = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .assignment_target,
+                    .data = .{
+                        .assignment_target = .{
+                            .access = access.?.data.node,
+                            .attribute = attribute.?.data.node,
+                            .name = try string_pool.put(source[name.?.data.token.start..name.?.data.token.end]),
+                            .kind = .literal,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .assignment_target));
+            },
+            89 => {
+                switch (tokens[index].kind) {
+                    .l_brace => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(101);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            90 => {
+                switch (tokens[index].kind) {
+                    .keyword_in => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(7);
+                        index += 1;
+                    },
+                    .keyword_out => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(8);
+                        index += 1;
+                    },
+                    .keyword_inout => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(9);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            91 => {
+                switch (tokens[index].kind) {
+                    .keyword_external => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(103);
+                        index += 1;
+                    },
+                    .keyword_internal => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(104);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            92 => {
+                switch (tokens[index].kind) {
+                    .colon => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(87);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            93 => {
+                switch (tokens[index].kind) {
+                    .l_brace => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(110);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            94 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.element_stack.pop();
+                const expressions = self.element_stack.pop();
+                const target = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .continue_statement,
                     .data = .{
                         .continue_statement = .{
-                            .expression = expression,
-                            .name = .{
-                                .start = _target_token.start,
-                                .end = _target_token.end,
+                            .expressions = expressions.?.data.node,
+                            .target = try string_pool.put(source[target.?.data.token.start..target.?.data.token.end]),
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .continue_statement));
+            },
+            95 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.element_stack.pop();
+                const expressions = self.element_stack.pop();
+                const target = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .break_statement,
+                    .data = .{
+                        .break_statement = .{
+                            .expressions = expressions.?.data.node,
+                            .target = try string_pool.put(source[target.?.data.token.start..target.?.data.token.end]),
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .break_statement));
+            },
+            96 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.element_stack.pop();
+                const expression = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .runtime_expression,
+                    .data = .{
+                        .runtime_expression = .{
+                            .expression = expression.?.data.node,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .runtime_expression));
+            },
+            97 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.element_stack.pop();
+                const expression = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                const label = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .label_statement,
+                    .data = .{
+                        .label_statement = .{
+                            .expression = expression.?.data.node,
+                            .name = try string_pool.put(source[label.?.data.token.start..label.?.data.token.end]),
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .label_statement));
+            },
+            98 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.element_stack.pop();
+                const expressions = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                const target = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .call,
+                    .data = .{
+                        .call = .{
+                            .target = target.?.data.node,
+                            .arguments = expressions.?.data.node,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .call));
+            },
+            99 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.element_stack.pop();
+                const expressions = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                const target = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .assignment_statement,
+                    .data = .{
+                        .assignment_statement = .{
+                            .expressions = expressions.?.data.node,
+                            .target = target.?.data.node,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .assignment_statement));
+            },
+            100 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                const expression = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .type_attribute,
+                    .data = .{
+                        .type_attribute = .{
+                            .expression = expression.?.data.node,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .type_attribute));
+            },
+            101 => {
+                switch (tokens[index].kind) {
+                    .keyword_case => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(111);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            102 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                const parameter = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                const parameters = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .function_parameters,
+                    .data = .{
+                        .function_parameters = .{
+                            .parameter = parameter.?.data.node,
+                            .prev = parameters.?.data.node,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .function_parameters));
+            },
+            103 => {
+                switch (tokens[index].kind) {
+                    .l_paren => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(114);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            104 => {
+                switch (tokens[index].kind) {
+                    .l_paren => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(115);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            105 => {
+                switch (tokens[index].kind) {
+                    .colon => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(116);
+                        index += 1;
+                    },
+                    .keyword_external => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(103);
+                        index += 1;
+                    },
+                    .keyword_internal => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(104);
+                        index += 1;
+                    },
+                    else => {
+                        try self.pushASTNode(try self.pool.put(ASTNode{
+                            .kind = .function_body,
+                            .data = .{
+                                .function_body = .{
+                                    .expression = null,
+                                },
                             },
+                        }));
+
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .function_body));
+                    },
+                }
+            },
+            106 => {
+                _ = self.state_stack.pop();
+                const attribute = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .function_attributes,
+                    .data = .{
+                        .function_attributes = .{
+                            .attribute = attribute.?.data.node,
+                            .prev = null,
                         },
                     },
-                    .kind = .continue_statement,
-                    .position = .toPosition(lexer.current()),
-                };
-                ast_node_array.set(continue_statement_node_index, continue_statement_node) catch unreachable;
-                return continue_statement_node_index;
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .function_attributes));
+            },
+            107, 108 => {
+                _ = self.state_stack.pop();
+                const attribute = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .function_attribute,
+                    .data = .{
+                        .function_attribute = .{
+                            .attribute = attribute.?.data.node,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .function_attribute));
+            },
+            109 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                const attribute = self.element_stack.pop();
+                const name = self.element_stack.pop();
+                const access = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .function_parameter,
+                    .data = .{
+                        .function_parameter = .{
+                            .access = access.?.data.node,
+                            .attribute = attribute.?.data.node,
+                            .name = try string_pool.put(source[name.?.data.token.start..name.?.data.token.end]),
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .function_parameter));
+            },
+            110 => {
+                switch (tokens[index].kind) {
+                    .identifier => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(119);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            112 => {
+                switch (tokens[index].kind) {
+                    .r_brace => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(123);
+                        index += 1;
+                    },
+                    .keyword_case => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(111);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            113 => {
+                _ = self.state_stack.pop();
+                const case = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .match_cases,
+                    .data = .{
+                        .match_cases = .{
+                            .case = case.?.data.node,
+                            .cases = null,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .match_cases));
+            },
+            117 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                const attribute = self.element_stack.pop();
+                const attributes = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .function_attributes,
+                    .data = .{
+                        .function_attributes = .{
+                            .attribute = attribute.?.data.node,
+                            .prev = attributes.?.data.node,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .function_attributes));
+            },
+            118 => {
+                switch (tokens[index].kind) {
+                    .percent => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(128);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            119 => {
+                switch (tokens[index].kind) {
+                    .colon => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(87);
+                        index += 1;
+                    },
+                    else => {
+                        try self.pushASTNode(try self.pool.put(ASTNode{
+                            .kind = .type_attribute_optional,
+                            .data = .{
+                                .type_attribute_optional = .{
+                                    .attribute = null,
+                                },
+                            },
+                        }));
+
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .type_attribute_optional));
+                    },
+                }
+            },
+            120 => {
+                switch (tokens[index].kind) {
+                    .r_brace => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(131);
+                        index += 1;
+                    },
+                    .identifier => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(119);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            121 => {
+                _ = self.state_stack.pop();
+                const entry = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .type_entries,
+                    .data = .{
+                        .type_entries = .{
+                            .entry = entry.?.data.node,
+                            .prev = null,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .type_entries));
+            },
+            122 => {
+                switch (tokens[index].kind) {
+                    .colon => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(133);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            123 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.element_stack.pop();
+                const cases = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                const expression = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .match_expression,
+                    .data = .{
+                        .match_expression = .{
+                            .cases = cases.?.data.node,
+                            .expression = expression.?.data.node,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .match_expression));
+            },
+            124 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                const case = self.element_stack.pop();
+                const cases = self.element_stack.pop();
+
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .match_cases,
+                    .data = .{
+                        .match_cases = .{
+                            .cases = cases.?.data.node,
+                            .case = case.?.data.node,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .match_cases));
+            },
+            125 => {
+                switch (tokens[index].kind) {
+                    .comma => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(61);
+                        index += 1;
+                    },
+                    .r_paren => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(134);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            126 => {
+                switch (tokens[index].kind) {
+                    .comma => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(61);
+                        index += 1;
+                    },
+                    .r_paren => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(135);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            127 => {
+                switch (tokens[index].kind) {
+                    .comma => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(61);
+                        index += 1;
+                    },
+                    else => {
+                        _ = self.state_stack.pop();
+                        _ = self.state_stack.pop();
+                        const expression = self.element_stack.pop();
+                        _ = self.element_stack.pop();
+
+                        try self.pushASTNode(try self.pool.put(ASTNode{
+                            .kind = .function_body,
+                            .data = .{
+                                .function_body = .{
+                                    .expression = expression.?.data.node,
+                                },
+                            },
+                        }));
+
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .function_body));
+                    },
+                }
+            },
+            128 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.element_stack.pop();
+                const body = self.element_stack.pop();
+                const attributes = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                const parameters = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .function,
+                    .data = .{
+                        .function = .{
+                            .attributes = attributes.?.data.node,
+                            .parameters = parameters.?.data.node,
+                            .body = body.?.data.node,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .function));
+            },
+            129 => {
+                switch (tokens[index].kind) {
+                    .semicolon => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(136);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            130 => {
+                _ = self.state_stack.pop();
+                const attribute = self.element_stack.pop();
+
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .type_attribute_optional,
+                    .data = .{
+                        .type_attribute_optional = .{
+                            .attribute = attribute.?.data.node,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .type_attribute_optional));
+            },
+            131 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.element_stack.pop();
+                const entries = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                const expression = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .type,
+                    .data = .{
+                        .type = .{
+                            .entries = entries.?.data.node,
+                            .expression = expression.?.data.node,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .type));
+            },
+            132 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                const entry = self.element_stack.pop();
+                const entries = self.element_stack.pop();
+
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .type_entries,
+                    .data = .{
+                        .type_entries = .{
+                            .entry = entry.?.data.node,
+                            .prev = entries.?.data.node,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .type_entries));
+            },
+            134 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.element_stack.pop();
+                const expression = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                _ = self.element_stack.pop();
+
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .function_external_attribute,
+                    .data = .{
+                        .function_external_attribute = .{
+                            .expression = expression.?.data.node,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .function_external_attribute));
+            },
+            135 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.element_stack.pop();
+                const expression = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                _ = self.element_stack.pop();
+
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .function_internal_attribute,
+                    .data = .{
+                        .function_internal_attribute = .{
+                            .expression = expression.?.data.node,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .function_internal_attribute));
+            },
+            136 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.element_stack.pop();
+                const expression = self.element_stack.pop();
+                const name = self.element_stack.pop();
+
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .type_entry,
+                    .data = .{
+                        .type_entry = .{
+                            .expression = expression.?.data.node,
+                            .name = try string_pool.put(source[name.?.data.token.start..name.?.data.token.end]),
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .type_entry));
+            },
+            137 => {
+                switch (tokens[index].kind) {
+                    .comma => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(61);
+                        index += 1;
+                    },
+                    .semicolon => {
+                        try self.pushToken(tokens[index]);
+                        try self.state_stack.push(138);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            138 => {
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.state_stack.pop();
+                _ = self.element_stack.pop();
+                const expression = self.element_stack.pop();
+                _ = self.element_stack.pop();
+                const condition = self.element_stack.pop();
+                _ = self.element_stack.pop();
+
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .kind = .match_case,
+                    .data = .{
+                        .match_case = .{
+                            .expression = condition.?.data.node,
+                            .body = expression.?.data.node,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .match_case));
+            },
+            255 => {
+                try reporter.add(io, .@"error", filename, 1, 1, "", .{});
+                return error.ParseFailed;
+            },
+            else => unreachable,
+        }
+    }
+}
+
+// We don't support multiple-bytes charactor right now.
+fn decodeChar(source: [:0]u8, token: Tokenizer.Token, reporter: *Error.Reporter, io: std.Io, filename: u32) error{ DecodeFailed, OutOfMemory }!u8 {
+    var from = token.start + 1;
+    var index = from;
+    var write = from;
+
+    const State = enum {
+        start,
+        finish,
+        escaped,
+        escaped_hex,
+        escaped_hex2,
+    };
+
+    ct: switch (State.start) {
+        .start => {
+            switch (source[index]) {
+                0 => {
+                    try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Unexpected EOF!", .{});
+                    return error.DecodeFailed;
+                },
+                '\\' => {
+                    from = index;
+                    index += 1;
+                    continue :ct .escaped;
+                },
+                '\'' => {
+                    try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Cannot decode empty char!", .{});
+                    return error.DecodeFailed;
+                },
+                else => {
+                    index += 1;
+                    continue :ct .finish;
+                },
+            }
+        },
+        .finish => {
+            switch (source[index]) {
+                0 => {
+                    try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Unexpected EOF!", .{});
+                    return error.DecodeFailed;
+                },
+                '\'' => {
+                    return source[write - 1];
+                },
+                else => {
+                    try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Cannot decode non-single-byte char!", .{});
+                    return error.DecodeFailed;
+                },
+            }
+        },
+        .escaped => {
+            switch (source[index]) {
+                0 => {
+                    try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Unexpected EOF!", .{});
+                    return error.DecodeFailed;
+                },
+                't' => {
+                    source[write] = '\t';
+                    index += 1;
+                    write += 1;
+                    if (source[index] == 0) {
+                        try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Unexpected EOF!", .{});
+                        return error.DecodeFailed;
+                    }
+                    if (source[index] != '\'') {
+                        try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Cannot decode non-single-byte char!", .{});
+                        return error.DecodeFailed;
+                    } else {
+                        source[write] = '\'';
+                        write += 1;
+                    }
+                    return source[write - 1];
+                },
+                'n' => {
+                    source[write] = '\n';
+                    index += 1;
+                    write += 1;
+
+                    if (source[index] == 0) {
+                        try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Unexpected EOF!", .{});
+                        return error.DecodeFailed;
+                    }
+                    if (source[index] != '\'') {
+                        try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Cannot decode non-single-byte char!", .{});
+                        return error.DecodeFailed;
+                    } else {
+                        source[write] = '\'';
+                        write += 1;
+                    }
+                    return source[write - 1];
+                },
+                'r' => {
+                    source[write] = '\r';
+                    index += 1;
+                    write += 1;
+
+                    if (source[index] == 0) {
+                        try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Unexpected EOF!", .{});
+                        return error.DecodeFailed;
+                    }
+                    if (source[index] != '\'') {
+                        try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Cannot decode non-single-byte char!", .{});
+                        return error.DecodeFailed;
+                    } else {
+                        source[write] = '\'';
+                        write += 1;
+                    }
+                    return source[write - 1];
+                },
+                '\'' => {
+                    source[write] = '\'';
+                    index += 1;
+                    write += 1;
+
+                    if (source[index] == 0) {
+                        try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Unexpected EOF!", .{});
+                        return error.DecodeFailed;
+                    }
+                    if (source[index] != '\'') {
+                        try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Cannot decode non-single-byte char!", .{});
+                        return error.DecodeFailed;
+                    } else {
+                        source[write] = '\'';
+                        write += 1;
+                    }
+                    return source[write - 1];
+                },
+                '"' => {
+                    source[write] = '"';
+                    index += 1;
+                    write += 1;
+
+                    if (source[index] == 0) {
+                        try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Unexpected EOF!", .{});
+                        return error.DecodeFailed;
+                    }
+                    if (source[index] != '\'') {
+                        try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Cannot decode non-single-byte char!", .{});
+                        return error.DecodeFailed;
+                    } else {
+                        source[write] = '\'';
+                        write += 1;
+                    }
+                    return source[write - 1];
+                },
+                'x' => {
+                    index += 1;
+                    from = index;
+                    continue :ct .escaped_hex;
+                },
+                else => {
+                    try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Cannot decode non-hex-escaped charactor right now!", .{});
+                    return error.DecodeFailed;
+                },
+            }
+        },
+        .escaped_hex => {
+            if (source[index] == 0) {
+                try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Unexpected EOF!", .{});
+                return error.DecodeFailed;
+            } else if (std.ascii.isHex(source[index])) {
+                index += 1;
+                continue :ct .escaped_hex2;
+            } else if (source[index] == '\'') {
+                try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Cannot decode charactor! Too short!", .{});
+                return error.DecodeFailed;
             } else {
-                // XXX Error
-                try error_report_array.addExpectedExpressionReport(.toPosition(lexer.current()));
-
-                lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-                ast_node_array.free(continue_statement_node_index) catch unreachable;
-                return null;
+                try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Cannot decode charactor! Expect a hex encoded charactor!", .{});
+                return error.DecodeFailed;
             }
-        } else {
-            // XXX Error
-            try error_report_array.addUnexpectedTokenReport("Identifier", .toRange(_target_token), .toPosition(_target_token));
+        },
+        .escaped_hex2 => {
+            if (source[index] == 0) {
+                try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Unexpected EOF!", .{});
+                return error.DecodeFailed;
+            } else if (std.ascii.isHex(source[index])) {
+                index += 1;
 
-            lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-            ast_node_array.free(continue_statement_node_index) catch unreachable;
-            return null;
-        }
-    } else {
-        // XXX Error
-        try error_report_array.addExpectedTokenReport("'continue'", .toPosition(lexer.current()));
-
-        lexer.skipUntil(&[_]Lexer.Token.Kind{.semicolon});
-        ast_node_array.free(continue_statement_node_index) catch unreachable;
-        return null;
+                if (source[index] == 0) {
+                    try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Unexpected EOF!", .{});
+                    return error.DecodeFailed;
+                }
+                if (source[index] != '\'') {
+                    try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Cannot decode non-single-byte char!", .{});
+                    return error.DecodeFailed;
+                }
+                var buf: [2]u8 = undefined;
+                const result = std.fmt.hexToBytes(&buf, source[from..index]) catch unreachable;
+                source[write] = result[0];
+                write += 1;
+                source[write] = '\'';
+                write += 1;
+                return source[write - 2];
+            } else {
+                try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Cannot decode charactor! Expect a hex encoded charactor!", .{});
+                return error.DecodeFailed;
+            }
+        },
     }
 }
 
-fn parseCommentedStatement(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Commented Statement at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Commented Statement at {any}", .{Module.Position.toPosition(lexer.current())});
+fn decodeString(source: [:0]u8, token: Tokenizer.Token, reporter: *Error.Reporter, io: std.Io, filename: u32) error{ DecodeFailed, OutOfMemory }![]u8 {
+    var from = token.start + 1;
+    var index = from;
+    var write = from;
+
+    const State = enum {
+        start,
+        escaped,
+        escaped_hex,
+        escaped_hex2,
     };
 
-    const commented_statement_node_index = try ast_node_array.alloc();
-    // Release
-
-    const peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind != .comment) {
-            ast_node_array.free(commented_statement_node_index) catch unreachable;
-            return null;
-        } else {
-            _ = lexer.next();
-            if (try parseStatement(ast_node_array, lexer, error_report_array)) |statement| {
-                const commented_statement_node = ASTNode{
-                    .data = .{
-                        .comment = .{
-                            .line = _peek_token.line,
-                            .next = statement,
-                            .range = .toRange(_peek_token),
-                        },
-                    },
-                    .kind = .comment,
-                    .position = .toPosition(lexer.current()),
-                };
-
-                ast_node_array.set(commented_statement_node_index, commented_statement_node) catch unreachable;
-                return commented_statement_node_index;
-            }
-            const commented_statement_node = ASTNode{
-                .data = .{
-                    .comment = .{
-                        .line = _peek_token.line,
-                        .next = null,
-                        .range = .toRange(_peek_token),
-                    },
+    ct: switch (State.start) {
+        .start => {
+            switch (source[index]) {
+                0 => {
+                    try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Unexpected EOF!", .{});
+                    return error.DecodeFailed;
                 },
-                .position = .toPosition(lexer.current()),
-                .kind = .comment,
-            };
-
-            ast_node_array.set(commented_statement_node_index, commented_statement_node) catch unreachable;
-            return commented_statement_node_index;
-        }
-    } else {
-        // Error handle
-        return null;
+                '\\' => {
+                    from = index;
+                    index += 1;
+                    continue :ct .escaped;
+                },
+                '"' => {
+                    source[write] = '"';
+                    write += 1;
+                    return source[index..write];
+                },
+                else => {
+                    index += 1;
+                    write += 1;
+                    continue :ct .start;
+                },
+            }
+        },
+        .escaped => {
+            switch (source[index]) {
+                0 => {
+                    try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Unexpected EOF!", .{});
+                    return error.DecodeFailed;
+                },
+                't' => {
+                    source[write] = '\t';
+                    index += 1;
+                    write += 1;
+                    continue :ct .start;
+                },
+                'n' => {
+                    source[write] = '\n';
+                    index += 1;
+                    write += 1;
+                    continue :ct .start;
+                },
+                'r' => {
+                    source[write] = '\r';
+                    index += 1;
+                    write += 1;
+                    continue :ct .start;
+                },
+                '\'' => {
+                    source[write] = '\'';
+                    index += 1;
+                    write += 1;
+                    continue :ct .start;
+                },
+                '"' => {
+                    source[write] = '"';
+                    index += 1;
+                    write += 1;
+                    continue :ct .start;
+                },
+                'x' => {
+                    index += 1;
+                    continue :ct .escaped_hex;
+                },
+                else => {
+                    try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Unexpected charactor {s}", .{source[index .. index + 1]});
+                    return error.DecodeFailed;
+                },
+            }
+        },
+        .escaped_hex => {
+            if (source[index] == 0) {
+                try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Unexpected EOF!", .{});
+                return error.DecodeFailed;
+            } else if (std.ascii.isHex(source[index])) {
+                index += 1;
+                continue :ct .escaped_hex2;
+            } else {
+                try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Unexpected charactor {s}", .{source[index .. index + 1]});
+                return error.DecodeFailed;
+            }
+        },
+        .escaped_hex2 => {
+            if (source[index] == 0) {
+                try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Unexpected EOF!", .{});
+                return error.DecodeFailed;
+            } else if (std.ascii.isHex(source[index])) {
+                index += 1;
+                var buf: [2]u8 = undefined;
+                const result = std.fmt.hexToBytes(&buf, source[from..index]) catch unreachable;
+                source[write] = result[0];
+                write += 1;
+                continue :ct .start;
+            } else {
+                try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Unexpected charactor {s}", .{source[index .. index + 1]});
+                return error.DecodeFailed;
+            }
+        },
     }
 }
 
-fn parseCommentedSingleExpression(ast_node_array: *ASTNodeArray, lexer: *TokenArray, error_report_array: *ErrorReportArray) error{OutOfCapacity}!?usize {
-    if (enable_trace) {
-        std.log.debug("Parsing Commented Single Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    }
-    defer if (enable_trace) {
-        std.log.debug("Leaving Commemted Single Expression at {any}", .{Module.Position.toPosition(lexer.current())});
-    };
-
-    const commented_single_expression_node_index = try ast_node_array.alloc();
-    // Release
-
-    const peek_token = lexer.peek();
-    if (peek_token) |_peek_token| {
-        if (_peek_token.kind != .comment) {
-            ast_node_array.free(commented_single_expression_node_index) catch unreachable;
-            return null;
-        } else {
-            _ = lexer.next();
-            if (try parseSingleExpression(ast_node_array, lexer, error_report_array)) |single_expression_index| {
-                const commented_single_expression_node = ASTNode{
-                    .data = .{
-                        .comment = .{
-                            .line = _peek_token.line,
-                            .next = single_expression_index,
-                            .range = .toRange(_peek_token),
-                        },
-                    },
-                    .kind = .comment,
-                    .position = .toPosition(lexer.current()),
-                };
-
-                ast_node_array.set(commented_single_expression_node_index, commented_single_expression_node) catch unreachable;
-                return commented_single_expression_node_index;
-            }
-            const commented_single_expression_node = ASTNode{
-                .data = .{
-                    .comment = .{
-                        .line = _peek_token.line,
-                        .next = null,
-                        .range = .toRange(_peek_token),
-                    },
-                },
-                .kind = .comment,
-                .position = .toPosition(lexer.current()),
-            };
-
-            ast_node_array.set(commented_single_expression_node_index, commented_single_expression_node) catch unreachable;
-            return commented_single_expression_node_index;
-        }
+fn decodeIdentifier(source: [:0]u8, token: Tokenizer.Token, reporter: *Error.Reporter, io: std.Io, filename: u32) error{ DecodeFailed, OutOfMemory }![]u8 {
+    if (source[token.start] == '#') {
+        return try decodeString(source, token, reporter, io, filename);
     } else {
-        // Error handle
-        return null;
+        return source[token.start..token.end];
     }
+}
+
+fn decodeInteger(source: [:0]u8, token: Tokenizer.Token, reporter: *Error.Reporter, io: std.Io, filename: u32) error{ DecodeFailed, OutOfMemory }!usize {
+    _ = source;
+    _ = token;
+    _ = reporter;
+    _ = io;
+    _ = filename;
+    // Stub
+    return 0;
+}
+
+fn decodeFloat(source: [:0]u8, token: Tokenizer.Token, reporter: *Error.Reporter, io: std.Io, filename: u32) error{ DecodeFailed, OutOfMemory }!f64 {
+    _ = source;
+    _ = token;
+    _ = reporter;
+    _ = io;
+    _ = filename;
+    // Stub
+    return 0;
+}
+
+fn reportUnexpectedToken(reporter: *Error.Reporter, io: std.Io, filename: u32, token: Tokenizer.Token) error{OutOfMemory}!void {
+    try reporter.add(io, .@"error", filename, token.line, token.pos, "Unexpected token {any}", .{token.kind});
 }
