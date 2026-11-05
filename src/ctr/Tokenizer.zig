@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 const std = @import("std");
+const Error = @import("Error.zig");
 
 pub const Token = struct {
     pub const Kind = enum {
@@ -244,16 +245,19 @@ pub fn next(tokenizer: *Tokenizer) Token {
                 ' ', '\t' => {
                     tokenizer.index += 1;
                     tokenizer.pos += 1;
+                    token.start += 1;
                     continue :state .start;
                 },
                 '\r' => {
                     tokenizer.index += 1;
+                    token.start += 1;
                     continue :state .start;
                 },
                 '\n' => {
                     token.line = tokenizer.line;
                     token.pos = tokenizer.pos;
                     tokenizer.line += 1;
+                    token.start += 1;
                     token.kind = .newline;
                     tokenizer.index += 1;
                     tokenizer.pos = 1;
@@ -262,11 +266,13 @@ pub fn next(tokenizer: *Tokenizer) Token {
                 '"' => {
                     tokenizer.index += 1;
                     tokenizer.pos += 1;
+                    token.kind = .string;
                     continue :state .string;
                 },
                 '\'' => {
                     tokenizer.index += 1;
                     tokenizer.pos += 1;
+                    token.kind = .char;
                     continue :state .char;
                 },
                 'a'...'z', 'A'...'Z', '_' => {
@@ -431,12 +437,18 @@ pub fn next(tokenizer: *Tokenizer) Token {
                     token.kind = .ampersand;
                     continue :state .commit;
                 },
+                else => {
+                    token.kind = .invalid;
+                    continue :state .invalid;
+                },
             }
         },
         .commit => {
-            token.end = tokenizer.index - 1;
-            if (token.kind == .identifier and Token.toKeyword(tokenizer.buffer[token.start..token.end])) |kind| {
-                token.kind = kind;
+            token.end = tokenizer.index;
+            if (token.kind == .identifier) {
+                if (Token.toKeyword(tokenizer.buffer[token.start..token.end])) |kind| {
+                    token.kind = kind;
+                }
             }
             return token;
         },
@@ -450,6 +462,8 @@ pub fn next(tokenizer: *Tokenizer) Token {
             } else if (tokenizer.buffer[tokenizer.index] == '\n') {
                 token.kind = .invalid;
                 continue :state .commit;
+            } else {
+                continue :state .invalid;
             }
         },
         .hash => {
@@ -465,7 +479,7 @@ pub fn next(tokenizer: *Tokenizer) Token {
                     token.kind = .identifier;
                     continue :state .string;
                 },
-                'a'...'z', 'A'...'Z', '_' => {
+                'a'...'z', 'A'...'Z', '_', '0'...'9' => {
                     token.kind = .macro;
                     continue :state .macro;
                 },
@@ -479,7 +493,7 @@ pub fn next(tokenizer: *Tokenizer) Token {
             tokenizer.pos += 1;
 
             switch (tokenizer.buffer[tokenizer.index]) {
-                'a'...'z', 'A'...'Z', '_' => {
+                'a'...'z', 'A'...'Z', '_', '0'...'9' => {
                     continue :state .identifier;
                 },
                 else => {
@@ -600,7 +614,7 @@ pub fn next(tokenizer: *Tokenizer) Token {
                 '.' => {
                     continue :state .integer_dot;
                 },
-                'a'...'d', 'f'...'z', 'A'...'D', 'F'...'Z', '0'...'9', '_' => {
+                'a'...'d', 'f'...'o', 'r'...'z', 'A'...'D', 'F'...'O', 'R'...'Z', '0'...'9', '_' => {
                     tokenizer.index += 1;
                     tokenizer.pos += 1;
                     continue :state .integer;
@@ -636,7 +650,7 @@ pub fn next(tokenizer: *Tokenizer) Token {
             tokenizer.pos += 1;
 
             switch (tokenizer.buffer[tokenizer.index]) {
-                'a'...'d', 'f'...'z', 'A'...'D', 'F'...'Z', '0'...'9', '_' => {
+                'a'...'d', 'f'...'o', 'r'...'z', 'A'...'D', 'F'...'O', 'R'...'Z', '0'...'9', '_' => {
                     tokenizer.index += 1;
                     tokenizer.pos += 1;
                     continue :state .float;
@@ -680,4 +694,29 @@ pub fn next(tokenizer: *Tokenizer) Token {
             continue :state .float;
         },
     }
+}
+
+pub fn LexedArray(tokenizer: *Tokenizer, allocator: std.mem.Allocator, io: std.Io, filename: u32, reporter: *Error.Reporter) error{ LexFailed, OutOfMemory }![]Token {
+    var list: std.ArrayList(Token) = try .initCapacity(allocator, 128);
+    errdefer list.clearAndFree(allocator);
+
+    var token = tokenizer.next();
+    var old: ?Token = null;
+    while (token.kind != .eof) {
+        if (old) |_old| {
+            if (_old == token) {
+                try reporter.add(io, .@"error", filename, token.line, token.pos, "File does not contain a EOF charactor!", .{});
+                return error.LexFailed;
+            }
+        }
+
+        try list.append(allocator, token);
+        old = token;
+        token = tokenizer.next();
+    }
+
+    // Shall be EOF
+    try list.append(allocator, token);
+
+    return list.toOwnedSlice(allocator);
 }

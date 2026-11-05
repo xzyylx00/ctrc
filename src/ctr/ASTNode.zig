@@ -19,7 +19,8 @@ const Pool = @import("Pool.zig").Pool;
 pub const ASTNodeHandle = u32;
 const StringPool = @import("StringPool.zig");
 const Self = @This();
-pub const ASTNodePool = Pool(ASTNodeHandle, Self);
+
+pub const ASTNodePool = Pool(ASTNodeHandle, Self, 4096);
 
 pub const Kind = enum(u8) {
     module = 0,
@@ -62,7 +63,7 @@ pub const Kind = enum(u8) {
     attributed_expression,
 };
 
-const Data = union {
+const Data = union(Kind) {
     module: struct {
         body: ASTNodeHandle,
     },
@@ -91,7 +92,7 @@ const Data = union {
         cases: ASTNodeHandle,
     },
     match_cases: struct {
-        cases: ASTNodeHandle,
+        cases: ?ASTNodeHandle,
         case: ASTNodeHandle,
     },
     match_case: struct {
@@ -104,7 +105,7 @@ const Data = union {
         body: ASTNodeHandle,
     },
     function_parameters: struct {
-        prev: ASTNodeHandle,
+        prev: ?ASTNodeHandle,
         parameter: ASTNodeHandle,
     },
     function_parameter: struct {
@@ -199,7 +200,7 @@ const Data = union {
         expression: ?ASTNodeHandle,
     },
     type_attribute_optional: struct {
-        attribute: ASTNodeHandle,
+        attribute: ?ASTNodeHandle,
     },
     type_attribute: struct {
         expression: ASTNodeHandle,

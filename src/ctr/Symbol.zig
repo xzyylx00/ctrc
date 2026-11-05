@@ -16,7 +16,7 @@
 
 const Self = @This();
 const StringPool = @import("StringPool.zig");
-const Expression = @import("Expression.zig");
+const ASTNode = @import("ASTNode.zig");
 const Pool = @import("Pool.zig").Pool;
 
 // Here is a lot of pools:
@@ -35,7 +35,7 @@ pub const SymbolHandle = u32;
 pub const FunctionParameter = struct {
     access: Access,
     next: ?FunctionParameterHandle,
-    expression: Expression.ExpressionHandle,
+    expression: ASTNode.ASTNodeHandle,
     name: StringPool.StringHandle,
 };
 
@@ -48,15 +48,15 @@ pub const FunctionAttribute = struct {
 
 pub const MatchCase = struct {
     next: ?MatchCaseHandle,
-    condition: Expression.ExpressionHandle,
-    expression: Expression.ExpressionHandle,
+    condition: ASTNode.ASTNodeHandle,
+    expression: ASTNode.ASTNodeHandle,
 };
 
 pub const MatchCaseHandle = u32;
 
 pub const TypeConstructEntry = struct {
     name: ?StringPool.StringHandle,
-    expression: ?Expression.ExpressionHandle,
+    expression: ?ASTNode.ASTNodeHandle,
 };
 
 pub const TypeConstructEntryHandle = u32;
@@ -70,24 +70,24 @@ pub const Kind = enum {
 };
 
 const Data = union {
-    literal: Expression.ExpressionHandle,
+    literal: ASTNode.ASTNodeHandle,
     function: struct {
         parameter: ?FunctionParameter,
         attribute: ?FunctionAttribute,
-        @"return": ?Expression.ExpressionHandle,
-        expression: ?Expression.ExpressionHandle,
+        @"return": ?ASTNode.ASTNodeHandle,
+        expression: ?ASTNode.ASTNodeHandle,
     },
     match: struct {
         case: ?MatchCaseHandle,
-        expression: Expression.ExpressionHandle,
+        expression: ASTNode.ASTNodeHandle,
     },
     type: struct {
-        constructor: Expression.ExpressionHandle,
+        constructor: ASTNode.ASTNodeHandle,
         list: TypeConstructEntryHandle,
     },
     label: struct {
         name: StringPool.StringHandle,
-        expression: Expression.ExpressionHandle,
+        expression: ASTNode.ASTNodeHandle,
     },
 };
 

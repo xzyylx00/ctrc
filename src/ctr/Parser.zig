@@ -28,7 +28,7 @@ pub const Element = struct {
         token,
     };
 
-    const Data = union {
+    const Data = union(Element) {
         node: ASTNode.ASTNodeHandle,
         token: Tokenizer.Token,
     };
@@ -47,10 +47,10 @@ lock: std.Io.Mutex,
 pool: *ASTNode.ASTNodePool,
 
 pub fn init(allocator: std.mem.Allocator, pool: *ASTNode.ASTNodePool) error{OutOfMemory}!Self {
-    const element_stack = try ElementStack.init(allocator);
+    var element_stack = try ElementStack.init(allocator);
     errdefer element_stack.deinit();
 
-    const state_stack = try StateStack.init(allocator);
+    var state_stack = try StateStack.init(allocator);
     errdefer state_stack.deinit();
 
     return Self{
@@ -321,7 +321,8 @@ fn isShiftable(state: u8, kind: Tokenizer.Token.Kind) bool {
     };
 }
 
-fn skipUntilAcceptable(self: *Self, tokens: []Tokenizer.Token, index: usize) error{ParseFailed}!usize {
+fn skipUntilAcceptable(self: *Self, tokens: []Tokenizer.Token, _index: usize) error{ParseFailed}!usize {
+    var index = _index;
     while (tokens[index].kind != .eof and !isSyncToken(tokens[index])) : (index += 1) {}
 
     // if (tokens[index].kind == .eof) {
@@ -1109,7 +1110,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .assignment_target));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .assignment_target));
             },
             4 => {
                 switch (tokens[index].kind) {
@@ -1163,7 +1164,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .access_attribute));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .access_attribute));
             },
             8 => {
                 _ = self.state_stack.pop();
@@ -1178,7 +1179,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .access_attribute));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .access_attribute));
             },
             9 => {
                 _ = self.state_stack.pop();
@@ -1193,7 +1194,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .access_attribute));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .access_attribute));
             },
             10 => {
                 _ = self.state_stack.pop();
@@ -1208,7 +1209,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .pointer_attribute));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .pointer_attribute));
             },
             11 => {
                 _ = self.state_stack.pop();
@@ -1223,7 +1224,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .pointer_attribute));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .pointer_attribute));
             },
             12 => {
                 switch (tokens[index].kind) {
@@ -1285,7 +1286,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                             },
                         }));
 
-                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .identifier));
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .identifier));
                     },
                 }
             },
@@ -1312,7 +1313,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .literal));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .literal));
             },
             17 => {
                 _ = self.state_stack.pop();
@@ -1338,7 +1339,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .literal));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .literal));
             },
             18 => {
                 _ = self.state_stack.pop();
@@ -1364,7 +1365,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .literal));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .literal));
             },
             19 => {
                 _ = self.state_stack.pop();
@@ -1390,7 +1391,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .literal));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .literal));
             },
             20 => {
                 _ = self.state_stack.pop();
@@ -1415,7 +1416,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .literal));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .literal));
             },
             21 => {
                 _ = self.state_stack.pop();
@@ -1433,7 +1434,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .literal));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .literal));
             },
             22 => {
                 switch (tokens[index].kind) {
@@ -1469,7 +1470,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                             },
                         }));
 
-                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .block_body));
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .block_body));
                     },
                 }
             },
@@ -1502,7 +1503,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                             },
                         }));
 
-                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .non_attributed_expression));
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .non_attributed_expression));
                     },
                     else => {
                         _ = self.state_stack.pop();
@@ -1517,7 +1518,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                             },
                         }));
 
-                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .expression));
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .expression));
                     },
                 }
             },
@@ -1535,7 +1536,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .expressions));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .expressions));
             },
             28 => {
                 _ = self.state_stack.pop();
@@ -1550,7 +1551,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .module));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .module));
             },
             31 => {
                 switch (tokens[index].kind) {
@@ -1572,7 +1573,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                             },
                         }));
 
-                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .non_attributed_expression));
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .non_attributed_expression));
                     },
                     else => {
                         _ = self.state_stack.pop();
@@ -1587,7 +1588,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                             },
                         }));
 
-                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .expression));
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .expression));
                     },
                 }
             },
@@ -1613,7 +1614,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                             },
                         }));
 
-                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .assignment_target));
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .assignment_target));
                     },
                     else => {
                         _ = self.state_stack.pop();
@@ -1630,7 +1631,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                             },
                         }));
 
-                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .literal));
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .literal));
                     },
                 }
             },
@@ -1648,7 +1649,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .statements));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .statements));
             },
             38, 39, 41, 42, 43 => {
                 _ = self.state_stack.pop();
@@ -1663,7 +1664,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .statement));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .statement));
             },
             40 => {
                 switch (tokens[index].kind) {
@@ -1845,7 +1846,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .expression));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .expression));
             },
             47 => {
                 switch (tokens[index].kind) {
@@ -1881,7 +1882,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .identifier));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .identifier));
             },
             49 => {
                 switch (tokens[index].kind) {
@@ -1924,7 +1925,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                             },
                         }));
 
-                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .literal));
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .literal));
                     },
                 }
             },
@@ -1991,7 +1992,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .call_statement));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .call_statement));
             },
             64 => {
                 switch (tokens[index].kind) {
@@ -2030,7 +2031,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                             },
                         }));
 
-                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .block_body));
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .block_body));
                     },
                 }
             },
@@ -2050,7 +2051,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .statements));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .statements));
             },
             68 => {
                 switch (tokens[index].kind) {
@@ -2073,7 +2074,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                             },
                         }));
 
-                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .identifier));
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .identifier));
                     },
                 }
             },
@@ -2092,7 +2093,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .attributed_expression));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .attributed_expression));
             },
             71 => {
                 _ = self.state_stack.pop();
@@ -2110,7 +2111,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .block));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .block));
             },
             72 => {
                 _ = self.state_stack.pop();
@@ -2128,7 +2129,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .wrapped_expressions));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .wrapped_expressions));
             },
             73 => {
                 switch (tokens[index].kind) {
@@ -2175,7 +2176,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .function_parameters));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .function_parameters));
             },
             76 => {
                 switch (tokens[index].kind) {
@@ -2276,7 +2277,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .label_statement));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .label_statement));
             },
             82 => {
                 switch (tokens[index].kind) {
@@ -2308,7 +2309,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .expressions));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .expressions));
             },
             84 => {
                 switch (tokens[index].kind) {
@@ -2345,7 +2346,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .identifier));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .identifier));
             },
             86 => {
                 switch (tokens[index].kind) {
@@ -2384,7 +2385,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .assignment_target));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .assignment_target));
             },
             89 => {
                 switch (tokens[index].kind) {
@@ -2485,7 +2486,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .continue_statement));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .continue_statement));
             },
             95 => {
                 _ = self.state_stack.pop();
@@ -2506,7 +2507,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .break_statement));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .break_statement));
             },
             96 => {
                 _ = self.state_stack.pop();
@@ -2526,7 +2527,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .runtime_expression));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .runtime_expression));
             },
             97 => {
                 _ = self.state_stack.pop();
@@ -2547,7 +2548,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .label_statement));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .label_statement));
             },
             98 => {
                 _ = self.state_stack.pop();
@@ -2568,7 +2569,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .call));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .call));
             },
             99 => {
                 _ = self.state_stack.pop();
@@ -2589,7 +2590,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .assignment_statement));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .assignment_statement));
             },
             100 => {
                 _ = self.state_stack.pop();
@@ -2605,7 +2606,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .type_attribute));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .type_attribute));
             },
             101 => {
                 switch (tokens[index].kind) {
@@ -2637,7 +2638,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .function_parameters));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .function_parameters));
             },
             103 => {
                 switch (tokens[index].kind) {
@@ -2692,7 +2693,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                             },
                         }));
 
-                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .function_body));
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .function_body));
                     },
                 }
             },
@@ -2709,7 +2710,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .function_attributes));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .function_attributes));
             },
             107, 108 => {
                 _ = self.state_stack.pop();
@@ -2723,7 +2724,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .function_attribute));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .function_attribute));
             },
             109 => {
                 _ = self.state_stack.pop();
@@ -2743,7 +2744,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .function_parameter));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .function_parameter));
             },
             110 => {
                 switch (tokens[index].kind) {
@@ -2789,7 +2790,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .match_cases));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .match_cases));
             },
             117 => {
                 _ = self.state_stack.pop();
@@ -2806,7 +2807,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .function_attributes));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .function_attributes));
             },
             118 => {
                 switch (tokens[index].kind) {
@@ -2838,7 +2839,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                             },
                         }));
 
-                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .type_attribute_optional));
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .type_attribute_optional));
                     },
                 }
             },
@@ -2873,7 +2874,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .type_entries));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .type_entries));
             },
             122 => {
                 switch (tokens[index].kind) {
@@ -2913,7 +2914,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .match_expression));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .match_expression));
             },
             124 => {
                 _ = self.state_stack.pop();
@@ -2931,7 +2932,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .match_cases));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .match_cases));
             },
             125 => {
                 switch (tokens[index].kind) {
@@ -2991,7 +2992,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                             },
                         }));
 
-                        try self.state_stack.push(getReduceGoto(self.state_stack.top(), .function_body));
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .function_body));
                     },
                 }
             },
@@ -3021,7 +3022,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .function));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .function));
             },
             129 => {
                 switch (tokens[index].kind) {
@@ -3049,7 +3050,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .type_attribute_optional));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .type_attribute_optional));
             },
             131 => {
                 _ = self.state_stack.pop();
@@ -3076,7 +3077,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .type));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .type));
             },
             132 => {
                 _ = self.state_stack.pop();
@@ -3094,7 +3095,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .type_entries));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .type_entries));
             },
             134 => {
                 _ = self.state_stack.pop();
@@ -3115,7 +3116,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .function_external_attribute));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .function_external_attribute));
             },
             135 => {
                 _ = self.state_stack.pop();
@@ -3136,7 +3137,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .function_internal_attribute));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .function_internal_attribute));
             },
             136 => {
                 _ = self.state_stack.pop();
@@ -3156,7 +3157,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .type_entry));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .type_entry));
             },
             137 => {
                 switch (tokens[index].kind) {
@@ -3198,7 +3199,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }));
 
-                try self.state_stack.push(getReduceGoto(self.state_stack.top(), .match_case));
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .match_case));
             },
             255 => {
                 try reporter.add(io, .@"error", filename, 1, 1, "", .{});

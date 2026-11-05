@@ -45,7 +45,7 @@ pub const Reporter = struct {
 
         const reason = try std.fmt.allocPrint(self.allocator, fmt, args);
         errdefer self.allocator.free(reason);
-        self.list.append(self.allocator, Error{
+        try self.list.append(self.allocator, Error{
             .filename = filename,
             .line = line,
             .position = pos,

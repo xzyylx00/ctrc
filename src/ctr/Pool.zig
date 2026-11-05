@@ -45,23 +45,20 @@ pub fn Pool(comptime Handle: type, comptime Data: type, comptime default_size: u
         }
 
         pub fn deinit(self: *Self) void {
-            self.lock.tryLock();
+            while (!try self.lock.lock()) {}
             self.map.clearAndFree();
-            for (self.back) |key| {
-                self.allocator.free(key);
-            }
             self.allocator.free(self.back);
             self.* = Self{
                 .allocator = undefined,
                 .back = undefined,
-                .lock = undefined,
+                .lock = .unlocked,
                 .map = undefined,
                 .used = undefined,
             };
         }
 
         pub fn put(self: *Self, data: Data) error{OutOfMemory}!Handle {
-            self.lock.tryLock();
+            while (!try self.lock.lock()) {}
             defer self.lock.unlock();
             const check = try self.map.getOrPut(data);
             if (check.found_existing) {
@@ -80,7 +77,7 @@ pub fn Pool(comptime Handle: type, comptime Data: type, comptime default_size: u
         }
 
         pub fn get(self: *const Self, index: Handle) error{OutOfRange}!Data {
-            if (self.used >= index or index < 0) {
+            if (self.used <= index or index < 0) {
                 return error.OutOfRange;
             }
 

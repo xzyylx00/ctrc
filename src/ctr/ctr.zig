@@ -16,7 +16,7 @@
 
 pub const Compiler = @import("Compiler.zig");
 pub const ASTNode = @import("ASTNode.zig");
-pub const Expression = @import("Expression.zig");
+pub const Error = @import("Error.zig");
 pub const Symbol = @import("Symbol.zig");
 pub const Tokenizer = @import("Tokenizer.zig");
 pub const Pool = @import("Pool.zig").Pool;

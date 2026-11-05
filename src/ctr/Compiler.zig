@@ -59,6 +59,11 @@ pub fn deinit(self: *Self) void {
     return;
 }
 
-pub fn loadModule(self: *Self, source: [:0]const u8) error{OutOfMemory}!void {}
+pub fn loadModule(self: *Self, source: [:0]const u8) error{OutOfMemory}!void {
+    _ = self;
+    _ = source;
+}
 
-pub fn resolveModule(self: *Self) error{OutOfMemory}!void {}
+pub fn resolveModule(self: *Self) error{OutOfMemory}!void {
+    _ = self;
+}

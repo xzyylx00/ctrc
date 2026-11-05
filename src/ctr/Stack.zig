@@ -31,6 +31,7 @@ pub fn Stack(T: type, comptime default_size: usize) type {
             return Self{
                 .data = stack,
                 .used = 0,
+                .allocator = allocator,
             };
         }
 
@@ -65,9 +66,9 @@ pub fn Stack(T: type, comptime default_size: usize) type {
             return self.at(if (self.used != 0) self.used - 1 else 0);
         }
 
-        pub fn at(self: *const Self, index: usize) ?T {
+        pub fn at(self: *const Self, index: usize) ?*T {
             if (self.used > index) {
-                return self.data[index];
+                return &self.data[index];
             }
             return null;
         }

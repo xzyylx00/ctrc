@@ -27,7 +27,8 @@ allocator: std.mem.Allocator,
 lock: std.atomic.Mutex,
 
 pub fn init(allocator: std.mem.Allocator, default_size: usize) error{OutOfMemory}!Self {
-    const map = Map.init(allocator);
+    var map = Map.init(allocator);
+    errdefer map.deinit();
     const back = try allocator.alloc([]const u8, default_size);
     errdefer allocator.free(back);
 
@@ -43,7 +44,7 @@ pub fn init(allocator: std.mem.Allocator, default_size: usize) error{OutOfMemory
 }
 
 pub fn deinit(self: *Self) void {
-    self.lock.tryLock();
+    while (!self.lock.tryLock()) {}
     self.map.clearAndFree();
     for (self.back) |key| {
         self.allocator.free(key);
@@ -52,18 +53,18 @@ pub fn deinit(self: *Self) void {
     self.* = Self{
         .allocator = undefined,
         .back = undefined,
-        .lock = undefined,
+        .lock = .unlocked,
         .map = undefined,
         .used = undefined,
     };
 }
 
 pub fn put(self: *Self, string: []const u8) error{OutOfMemory}!StringHandle {
-    self.lock.tryLock();
+    while (!self.lock.tryLock()) {}
     defer self.lock.unlock();
     const check = try self.map.getOrPut(string);
     if (check.found_existing) {
-        return *check.value_ptr;
+        return check.value_ptr.*;
     } else {
         const dupe = try self.allocator.dupe(u8, string);
         errdefer self.allocator.free(dupe);
@@ -75,7 +76,7 @@ pub fn put(self: *Self, string: []const u8) error{OutOfMemory}!StringHandle {
         }
 
         check.key_ptr.* = dupe;
-        self.back[self.used] = *check.key_ptr;
+        self.back[self.used] = check.key_ptr.*;
         check.value_ptr.* = self.used;
         self.used += 1;
         return self.used - 1;
@@ -83,7 +84,7 @@ pub fn put(self: *Self, string: []const u8) error{OutOfMemory}!StringHandle {
 }
 
 pub fn get(self: *const Self, index: StringHandle) error{OutOfRange}![]const u8 {
-    if (self.used >= index or index < 0) {
+    if (self.used <= index or index < 0) {
         return error.OutOfRange;
     }
 
