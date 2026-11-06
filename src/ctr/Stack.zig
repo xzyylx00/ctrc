@@ -17,6 +17,10 @@
 const std = @import("std");
 
 pub fn Stack(T: type, comptime default_size: usize) type {
+    if (default_size == 0) {
+        @compileError("default_size can't be zero.");
+    }
+
     return struct {
         const Self = @This();
 
@@ -41,21 +45,21 @@ pub fn Stack(T: type, comptime default_size: usize) type {
         }
 
         pub fn push(self: *Self, data: T) error{OutOfMemory}!void {
-            if (self.data.len == self.used + 1) {
-                self.data = try self.allocator.realloc(self.data, self.used * 2);
+            if (self.data.len * 4 / 5 < self.used) {
+                self.data = try self.allocator.realloc(self.data, @max(self.used * 2, 1));
             }
 
             self.data[self.used] = data;
             self.used += 1;
         }
 
-        pub fn pop(self: *Self) ?T {
-            if (self.data.len >= self.used * 2) {
-                self.data = try self.allocator.realloc(self.data, self.used / 2 + 1);
-            }
-
+        pub fn pop(self: *Self) error{OutOfMemory}!?T {
             if (self.used == 0) {
                 return null;
+            }
+
+            if (self.data.len > self.used * 2) {
+                self.data = try self.allocator.realloc(self.data, self.data.len / 2 + 1);
             }
 
             self.used -= 1;
@@ -63,7 +67,10 @@ pub fn Stack(T: type, comptime default_size: usize) type {
         }
 
         pub fn top(self: *const Self) ?T {
-            return self.at(if (self.used != 0) self.used - 1 else 0);
+            if (self.used == 0) {
+                return null;
+            }
+            return self.data[self.used - 1];
         }
 
         pub fn at(self: *const Self, index: usize) ?*T {

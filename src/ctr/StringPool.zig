@@ -26,7 +26,7 @@ used: StringHandle,
 allocator: std.mem.Allocator,
 lock: std.atomic.Mutex,
 
-pub fn init(allocator: std.mem.Allocator, default_size: usize) error{OutOfMemory}!Self {
+pub fn init(allocator: std.mem.Allocator, default_size: StringHandle) error{OutOfMemory}!Self {
     var map = Map.init(allocator);
     errdefer map.deinit();
     const back = try allocator.alloc([]const u8, default_size);
@@ -72,7 +72,7 @@ pub fn put(self: *Self, string: []const u8) error{OutOfMemory}!StringHandle {
         if (self.used >= self.back.len) {
             errdefer _ = self.map.remove(string);
 
-            self.map = try self.allocator.realloc(self.back, @trunc(self.used * 1.5));
+            self.back = try self.allocator.realloc(self.back, @trunc(@as(f32, @floatFromInt(self.used)) * @as(f32, 1.5)));
         }
 
         check.key_ptr.* = dupe;

@@ -29,11 +29,11 @@ pub fn Pool(comptime Handle: type, comptime Data: type, comptime default_size: u
         lock: std.atomic.Mutex,
 
         pub fn init(allocator: std.mem.Allocator) error{OutOfMemory}!Self {
-            const map = Map.init(allocator);
+            var map = Map.empty;
+            try map.ensureTotalCapacity(allocator, default_size);
+            errdefer map.clearAndFree(allocator);
             const back = try allocator.alloc(Data, default_size);
             errdefer allocator.free(back);
-
-            try map.ensureTotalCapacity(default_size);
 
             return Self{
                 .allocator = allocator,
@@ -45,8 +45,8 @@ pub fn Pool(comptime Handle: type, comptime Data: type, comptime default_size: u
         }
 
         pub fn deinit(self: *Self) void {
-            while (!try self.lock.lock()) {}
-            self.map.clearAndFree();
+            while (!self.lock.tryLock()) {}
+            self.map.clearAndFree(self.allocator);
             self.allocator.free(self.back);
             self.* = Self{
                 .allocator = undefined,
@@ -58,18 +58,17 @@ pub fn Pool(comptime Handle: type, comptime Data: type, comptime default_size: u
         }
 
         pub fn put(self: *Self, data: Data) error{OutOfMemory}!Handle {
-            while (!try self.lock.lock()) {}
+            while (!self.lock.tryLock()) {}
             defer self.lock.unlock();
-            const check = try self.map.getOrPut(data);
+            const check = try self.map.getOrPut(self.allocator, data);
             if (check.found_existing) {
-                return *check.value_ptr;
+                return check.value_ptr.*;
             } else {
                 if (self.used >= self.back.len) {
-                    errdefer _ = self.map.remove(data);
-                    self.map = try self.allocator.realloc(self.back, @trunc(self.used * 1.5));
+                    self.back = try self.allocator.realloc(self.back, @trunc(@as(f32, @floatFromInt(self.used)) * @as(f32, 1.5)));
                 }
 
-                self.back[self.used] = *check.key_ptr;
+                self.back[self.used] = check.key_ptr.*;
                 check.value_ptr.* = self.used;
                 self.used += 1;
                 return self.used - 1;

@@ -69,7 +69,7 @@ pub const Kind = enum {
     label,
 };
 
-const Data = union {
+const Data = union(Kind) {
     literal: ASTNode.ASTNodeHandle,
     function: struct {
         parameter: ?FunctionParameter,

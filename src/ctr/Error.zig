@@ -54,7 +54,7 @@ pub const Reporter = struct {
         });
     }
 
-    pub fn report(self: *Reporter, io: std.Io, string_pool: *StringPool, writer: std.Io.Writer) error{WriteFailed}!void {
+    pub fn report(self: *Reporter, io: std.Io, string_pool: *StringPool, writer: *std.Io.Writer) error{WriteFailed}!void {
         self.lock.lock(io) catch unreachable;
         defer self.lock.unlock(io);
 

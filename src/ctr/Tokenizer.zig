@@ -453,16 +453,17 @@ pub fn next(tokenizer: *Tokenizer) Token {
             return token;
         },
         .invalid => {
-            tokenizer.index += 1;
-            tokenizer.pos += 1;
-
             if (tokenizer.buffer[tokenizer.index] == '\x00') {
                 token.kind = .eof;
                 continue :state .commit;
             } else if (tokenizer.buffer[tokenizer.index] == '\n') {
                 token.kind = .invalid;
+                tokenizer.index += 1;
+                tokenizer.pos += 1;
                 continue :state .commit;
             } else {
+                tokenizer.index += 1;
+                tokenizer.pos += 1;
                 continue :state .invalid;
             }
         },
@@ -665,7 +666,7 @@ pub fn next(tokenizer: *Tokenizer) Token {
         },
         .float => {
             switch (tokenizer.buffer[tokenizer.index]) {
-                'a'...'d', 'f'...'z', 'A'...'D', 'F'...'Z', '0'...'9', '_' => {
+                'a'...'d', 'f'...'o', 'q'...'z', 'A'...'D', 'F'...'O', 'Q'...'Z', '0'...'9', '_' => {
                     tokenizer.index += 1;
                     tokenizer.pos += 1;
                     continue :state .float;
@@ -690,13 +691,16 @@ pub fn next(tokenizer: *Tokenizer) Token {
                     tokenizer.index += 1;
                     tokenizer.pos += 1;
                 },
+                else => {
+                    continue :state .invalid;
+                },
             }
             continue :state .float;
         },
     }
 }
 
-pub fn LexedArray(tokenizer: *Tokenizer, allocator: std.mem.Allocator, io: std.Io, filename: u32, reporter: *Error.Reporter) error{ LexFailed, OutOfMemory }![]Token {
+pub fn LexedArray(tokenizer: *Tokenizer, allocator: std.mem.Allocator, io: std.Io, filename: u32, reporter: *Error.Reporter, comptime exculded: []const Token.Kind) error{ LexFailed, OutOfMemory }![]Token {
     var list: std.ArrayList(Token) = try .initCapacity(allocator, 128);
     errdefer list.clearAndFree(allocator);
 
@@ -704,13 +708,24 @@ pub fn LexedArray(tokenizer: *Tokenizer, allocator: std.mem.Allocator, io: std.I
     var old: ?Token = null;
     while (token.kind != .eof) {
         if (old) |_old| {
-            if (_old == token) {
+            if (_old.end == token.end) {
                 try reporter.add(io, .@"error", filename, token.line, token.pos, "File does not contain a EOF charactor!", .{});
                 return error.LexFailed;
             }
         }
 
-        try list.append(allocator, token);
+        var is_exculded = false;
+        for (exculded) |_exculded| {
+            if (_exculded == token.kind) {
+                is_exculded = true;
+                break;
+            }
+        }
+
+        if (!is_exculded) {
+            try list.append(allocator, token);
+        }
+
         old = token;
         token = tokenizer.next();
     }

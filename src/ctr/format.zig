@@ -22,8 +22,9 @@ const Error = @import("Error.zig");
 const TAB_SIZE = 4;
 
 fn writeTabs(count: usize, writer: std.Io.Writer) error{WriteFailed}!void {
+    const tabs: [TAB_SIZE * count]u8 = @splat(' ');
     for (0..count) |_| {
-        try writer.write(" " ** TAB_SIZE);
+        try writer.write(tabs);
     }
 }
 

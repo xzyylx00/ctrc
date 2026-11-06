@@ -22,6 +22,7 @@ const Symbol = @import("Symbol.zig");
 const Tokenizer = @import("Tokenizer.zig");
 const Module = @import("Module.zig");
 
+ast_node_pool: ASTNode.ASTNodePool,
 string_pool: StringPool,
 symbol_pool: Symbol.SymbolPool,
 function_parameter_pool: Symbol.FunctionParameterPool,
@@ -29,23 +30,31 @@ module_pool: Module.ModulePool,
 dependency_pool: Module.DependencyPool,
 
 pub fn init(allocator: std.mem.Allocator) error{OutOfMemory}!Self {
-    const string_pool = try StringPool.init(allocator);
+    var ast_node_pool = try ASTNode.ASTNodePool.init(allocator);
+    errdefer ast_node_pool.deinit();
+
+    var string_pool = try StringPool.init(allocator, 1024);
     errdefer string_pool.deinit();
 
-    const symbol_pool = try Symbol.SymbolPool.init(allocator);
+    var symbol_pool = try Symbol.SymbolPool.init(allocator);
     errdefer symbol_pool.deinit();
 
-    const module_pool = try Module.ModulePool.init(allocator);
+    var module_pool = try Module.ModulePool.init(allocator);
     errdefer module_pool.deinit();
 
-    const dependency_pool = try Module.DependencyPool.init(allocator);
+    var dependency_pool = try Module.DependencyPool.init(allocator);
     errdefer dependency_pool.deinit();
+
+    var function_parameter_pool = try Symbol.FunctionParameterPool.init(allocator);
+    errdefer function_parameter_pool.deinit();
 
     return Self{
         .string_pool = string_pool,
         .symbol_pool = symbol_pool,
         .module_pool = module_pool,
         .dependency_pool = dependency_pool,
+        .ast_node_pool = ast_node_pool,
+        .function_parameter_pool = function_parameter_pool,
     };
 }
 
@@ -54,6 +63,8 @@ pub fn deinit(self: *Self) void {
     self.symbol_pool.deinit();
     self.module_pool.deinit();
     self.dependency_pool.deinit();
+    self.function_parameter_pool.deinit();
+    self.ast_node_pool.deinit();
 
     self.* = undefined;
     return;

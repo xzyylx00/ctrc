@@ -8,6 +8,6 @@ pub const Dependency = struct {};
 
 pub const DependencyHandle = u32;
 
-pub const DependencyPool = Pool(DependencyHandle, Dependency);
+pub const DependencyPool = Pool(DependencyHandle, Dependency, 32);
 
 dependency: DependencyHandle,

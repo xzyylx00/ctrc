@@ -28,7 +28,7 @@ pub const Element = struct {
         token,
     };
 
-    const Data = union(Element) {
+    const Data = union(Kind) {
         node: ASTNode.ASTNodeHandle,
         token: Tokenizer.Token,
     };
@@ -321,7 +321,7 @@ fn isShiftable(state: u8, kind: Tokenizer.Token.Kind) bool {
     };
 }
 
-fn skipUntilAcceptable(self: *Self, tokens: []Tokenizer.Token, _index: usize) error{ParseFailed}!usize {
+fn skipUntilAcceptable(self: *Self, tokens: []Tokenizer.Token, _index: usize) error{ ParseFailed, OutOfMemory }!usize {
     var index = _index;
     while (tokens[index].kind != .eof and !isSyncToken(tokens[index])) : (index += 1) {}
 
@@ -333,12 +333,13 @@ fn skipUntilAcceptable(self: *Self, tokens: []Tokenizer.Token, _index: usize) er
         if (isShiftable(self.state_stack.top() orelse 255, tokens[index].kind)) {
             return index;
         } else {
-            _ = self.state_stack.pop();
-            _ = self.element_stack.pop();
+            _ = try self.state_stack.pop();
+            _ = try self.element_stack.pop();
         }
     }
 
     return error.ParseFailed;
+    // return 255;
 }
 
 fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
@@ -347,7 +348,7 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
             return switch (node_kind) {
                 .module => 22,
                 .expressions => 23,
-                .non_attributed_expression => 24,
+                .non_attributed_expressions => 24,
                 .wrapped_expressions => 25,
                 .expression => 26,
                 .block => 27,
@@ -376,7 +377,7 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
         1 => {
             return switch (node_kind) {
                 .expressions => 23,
-                .non_attributed_expression => 24,
+                .non_attributed_expressions => 24,
                 .wrapped_expressions => 25,
                 .expression => 26,
                 .block => 27,
@@ -405,7 +406,7 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
         2 => {
             return switch (node_kind) {
                 .expressions => 49,
-                .non_attributed_expression => 24,
+                .non_attributed_expressions => 24,
                 .wrapped_expressions => 25,
                 .expression => 26,
                 .block => 27,
@@ -425,7 +426,7 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
         36 => {
             return switch (node_kind) {
                 .expressions => 65,
-                .non_attributed_expression => 24,
+                .non_attributed_expressions => 24,
                 .wrapped_expressions => 25,
                 .expression => 26,
                 .block => 27,
@@ -451,7 +452,7 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
         },
         44, 52 => {
             return switch (node_kind) {
-                .non_attributed_expression => 24,
+                .non_attributed_expressions => 24,
                 .wrapped_expressions => 25,
                 .expression => 69,
                 .block => 27,
@@ -478,7 +479,7 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
         },
         53 => {
             return switch (node_kind) {
-                .non_attributed_expression => 24,
+                .non_attributed_expressions => 24,
                 .wrapped_expressions => 25,
                 .expression => 73,
                 .block => 27,
@@ -505,7 +506,7 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
         },
         55 => {
             return switch (node_kind) {
-                .non_attributed_expression => 24,
+                .non_attributed_expressions => 24,
                 .wrapped_expressions => 25,
                 .expression => 77,
                 .block => 27,
@@ -525,7 +526,7 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
         56 => {
             return switch (node_kind) {
                 .expressions => 78,
-                .non_attributed_expression => 24,
+                .non_attributed_expressions => 24,
                 .wrapped_expressions => 25,
                 .expression => 26,
                 .block => 27,
@@ -545,7 +546,7 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
         57 => {
             return switch (node_kind) {
                 .expressions => 79,
-                .non_attributed_expression => 24,
+                .non_attributed_expressions => 24,
                 .wrapped_expressions => 25,
                 .expression => 26,
                 .block => 27,
@@ -564,7 +565,7 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
         },
         58 => {
             return switch (node_kind) {
-                .non_attributed_expression => 24,
+                .non_attributed_expressions => 24,
                 .wrapped_expressions => 25,
                 .expression => 80,
                 .block => 27,
@@ -589,7 +590,7 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
         },
         61 => {
             return switch (node_kind) {
-                .non_attributed_expression => 24,
+                .non_attributed_expressions => 24,
                 .wrapped_expressions => 25,
                 .expression => 83,
                 .block => 27,
@@ -609,7 +610,7 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
         62 => {
             return switch (node_kind) {
                 .expressions => 84,
-                .non_attributed_expression => 24,
+                .non_attributed_expressions => 24,
                 .wrapped_expressions => 25,
                 .expression => 26,
                 .block => 27,
@@ -629,7 +630,7 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
         67 => {
             return switch (node_kind) {
                 .expressions => 86,
-                .non_attributed_expression => 24,
+                .non_attributed_expressions => 24,
                 .wrapped_expressions => 25,
                 .expression => 26,
                 .block => 27,
@@ -654,7 +655,7 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
         },
         87 => {
             return switch (node_kind) {
-                .non_attributed_expression => 24,
+                .non_attributed_expressions => 24,
                 .wrapped_expressions => 25,
                 .expression => 100,
                 .block => 27,
@@ -718,7 +719,7 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
         },
         111 => {
             return switch (node_kind) {
-                .non_attributed_expression => 24,
+                .non_attributed_expressions => 24,
                 .wrapped_expressions => 25,
                 .expression => 122,
                 .block => 27,
@@ -744,7 +745,7 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
         114 => {
             return switch (node_kind) {
                 .expressions => 125,
-                .non_attributed_expression => 24,
+                .non_attributed_expressions => 24,
                 .wrapped_expressions => 25,
                 .expression => 26,
                 .block => 27,
@@ -764,7 +765,7 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
         115 => {
             return switch (node_kind) {
                 .expressions => 126,
-                .non_attributed_expression => 24,
+                .non_attributed_expressions => 24,
                 .wrapped_expressions => 25,
                 .expression => 26,
                 .block => 27,
@@ -784,7 +785,7 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
         116 => {
             return switch (node_kind) {
                 .expressions => 127,
-                .non_attributed_expression => 24,
+                .non_attributed_expressions => 24,
                 .wrapped_expressions => 25,
                 .expression => 26,
                 .block => 27,
@@ -817,7 +818,7 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
         133 => {
             return switch (node_kind) {
                 .expressions => 137,
-                .non_attributed_expression => 24,
+                .non_attributed_expressions => 24,
                 .wrapped_expressions => 25,
                 .expression => 26,
                 .block => 27,
@@ -1095,8 +1096,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
             },
             3 => {
                 // Reduce _ assignment target
-                _ = self.state_stack.pop();
-                _ = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .assignment_target,
@@ -1152,8 +1153,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }
             },
             7 => {
-                _ = self.state_stack.pop();
-                _ = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .access_attribute,
@@ -1167,8 +1168,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .access_attribute));
             },
             8 => {
-                _ = self.state_stack.pop();
-                _ = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .access_attribute,
@@ -1182,8 +1183,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .access_attribute));
             },
             9 => {
-                _ = self.state_stack.pop();
-                _ = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .access_attribute,
@@ -1197,8 +1198,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .access_attribute));
             },
             10 => {
-                _ = self.state_stack.pop();
-                _ = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .pointer_attribute,
@@ -1212,8 +1213,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .pointer_attribute));
             },
             11 => {
-                _ = self.state_stack.pop();
-                _ = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .pointer_attribute,
@@ -1273,8 +1274,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                         index += 1;
                     },
                     else => {
-                        _ = self.state_stack.pop();
-                        const name = self.element_stack.pop();
+                        _ = try self.state_stack.pop();
+                        const name = try self.element_stack.pop();
 
                         try self.pushASTNode(try self.pool.put(ASTNode{
                             .kind = .identifier,
@@ -1291,8 +1292,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }
             },
             16 => {
-                _ = self.state_stack.pop();
-                const string = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                const string = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .literal,
@@ -1303,8 +1304,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                                     error.DecodeFailed => {
                                         return error.ParseFailed;
                                     },
-                                    else => {
-                                        return err;
+                                    else => |_err| {
+                                        return @errorCast(_err);
                                     },
                                 }),
                             },
@@ -1316,14 +1317,14 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .literal));
             },
             17 => {
-                _ = self.state_stack.pop();
-                const integer = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                const integer = try self.element_stack.pop();
                 const value = decodeInteger(source, integer.?.data.token, reporter, io, filename) catch |err| switch (err) {
                     error.DecodeFailed => {
                         return error.ParseFailed;
                     },
-                    else => {
-                        return err;
+                    else => |_err| {
+                        return @errorCast(_err);
                     },
                 };
 
@@ -1342,14 +1343,14 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .literal));
             },
             18 => {
-                _ = self.state_stack.pop();
-                const float = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                const float = try self.element_stack.pop();
                 const value = decodeFloat(source, float.?.data.token, reporter, io, filename) catch |err| switch (err) {
                     error.DecodeFailed => {
                         return error.ParseFailed;
                     },
-                    else => {
-                        return err;
+                    else => |_err| {
+                        return @errorCast(_err);
                     },
                 };
 
@@ -1358,7 +1359,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     .data = .{
                         .literal = .{
                             .data = .{
-                                .float = value,
+                                .float = @bitCast(value),
                             },
                             .kind = .float,
                         },
@@ -1368,14 +1369,14 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .literal));
             },
             19 => {
-                _ = self.state_stack.pop();
-                const char = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                const char = try self.element_stack.pop();
                 const value = decodeChar(source, char.?.data.token, reporter, io, filename) catch |err| switch (err) {
                     error.DecodeFailed => {
                         return error.ParseFailed;
                     },
-                    else => {
-                        return err;
+                    else => |_err| {
+                        return @errorCast(_err);
                     },
                 };
 
@@ -1394,8 +1395,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .literal));
             },
             20 => {
-                _ = self.state_stack.pop();
-                const string = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                const string = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .literal,
@@ -1406,8 +1407,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                                     error.DecodeFailed => {
                                         return error.ParseFailed;
                                     },
-                                    else => {
-                                        return err;
+                                    else => |_err| {
+                                        return @errorCast(_err);
                                     },
                                 }),
                             },
@@ -1419,8 +1420,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .literal));
             },
             21 => {
-                _ = self.state_stack.pop();
-                _ = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .literal,
@@ -1457,8 +1458,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                         continue;
                     },
                     else => {
-                        _ = self.state_stack.pop();
-                        const expression = self.element_stack.pop();
+                        _ = try self.state_stack.pop();
+                        const expression = try self.element_stack.pop();
 
                         try self.pushASTNode(try self.pool.put(ASTNode{
                             .kind = .block_body,
@@ -1491,11 +1492,11 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
             25, 27, 29, 30, 32, 33, 35, 50 => {
                 switch (tokens[index].kind) {
                     .l_paren => {
-                        _ = self.state_stack.pop();
-                        const expressions = self.element_stack.pop();
+                        _ = try self.state_stack.pop();
+                        const expressions = try self.element_stack.pop();
 
                         try self.pushASTNode(try self.pool.put(ASTNode{
-                            .kind = .non_attributed_expression,
+                            .kind = .non_attributed_expressions,
                             .data = .{
                                 .non_attributed_expressions = .{
                                     .expressions = expressions.?.data.node,
@@ -1503,11 +1504,11 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                             },
                         }));
 
-                        try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .non_attributed_expression));
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .non_attributed_expressions));
                     },
                     else => {
-                        _ = self.state_stack.pop();
-                        const expressions = self.element_stack.pop();
+                        _ = try self.state_stack.pop();
+                        const expressions = try self.element_stack.pop();
 
                         try self.pushASTNode(try self.pool.put(ASTNode{
                             .kind = .expression,
@@ -1523,8 +1524,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }
             },
             26 => {
-                _ = self.state_stack.pop();
-                const expression = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                const expression = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .expressions,
@@ -1539,8 +1540,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .expressions));
             },
             28 => {
-                _ = self.state_stack.pop();
-                const expression = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                const expression = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .module,
@@ -1561,11 +1562,11 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                         index += 1;
                     },
                     .l_paren => {
-                        _ = self.state_stack.pop();
-                        const expressions = self.element_stack.pop();
+                        _ = try self.state_stack.pop();
+                        const expressions = try self.element_stack.pop();
 
                         try self.pushASTNode(try self.pool.put(ASTNode{
-                            .kind = .non_attributed_expression,
+                            .kind = .non_attributed_expressions,
                             .data = .{
                                 .non_attributed_expressions = .{
                                     .expressions = expressions.?.data.node,
@@ -1573,11 +1574,11 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                             },
                         }));
 
-                        try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .non_attributed_expression));
+                        try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .non_attributed_expressions));
                     },
                     else => {
-                        _ = self.state_stack.pop();
-                        const expressions = self.element_stack.pop();
+                        _ = try self.state_stack.pop();
+                        const expressions = try self.element_stack.pop();
 
                         try self.pushASTNode(try self.pool.put(ASTNode{
                             .kind = .expression,
@@ -1600,8 +1601,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                         index += 1;
                     },
                     .equal => {
-                        _ = self.state_stack.pop();
-                        const target = self.element_stack.pop();
+                        _ = try self.state_stack.pop();
+                        const target = try self.element_stack.pop();
                         try self.pushASTNode(try self.pool.put(ASTNode{
                             .kind = .assignment_target,
                             .data = .{
@@ -1617,8 +1618,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                         try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .assignment_target));
                     },
                     else => {
-                        _ = self.state_stack.pop();
-                        const value = self.element_stack.pop();
+                        _ = try self.state_stack.pop();
+                        const value = try self.element_stack.pop();
                         try self.pushASTNode(try self.pool.put(ASTNode{
                             .kind = .literal,
                             .data = .{
@@ -1636,8 +1637,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }
             },
             37 => {
-                _ = self.state_stack.pop();
-                const statement = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                const statement = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .statements,
@@ -1652,8 +1653,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .statements));
             },
             38, 39, 41, 42, 43 => {
-                _ = self.state_stack.pop();
-                const statement = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                const statement = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .statement,
@@ -1834,8 +1835,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }
             },
             46 => {
-                _ = self.state_stack.pop();
-                const attributed_expression = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                const attributed_expression = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .expression,
@@ -1862,8 +1863,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }
             },
             48 => {
-                _ = self.state_stack.pop();
-                const name = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                const name = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .identifier,
@@ -1873,8 +1874,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                                 error.DecodeFailed => {
                                     return error.ParseFailed;
                                 },
-                                else => {
-                                    return err;
+                                else => |_err| {
+                                    return @errorCast(_err);
                                 },
                             }),
                             .prev = null,
@@ -1911,8 +1912,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                         continue;
                     },
                     else => {
-                        _ = self.state_stack.pop();
-                        const value = self.element_stack.pop();
+                        _ = try self.state_stack.pop();
+                        const value = try self.element_stack.pop();
                         try self.pushASTNode(try self.pool.put(ASTNode{
                             .kind = .literal,
                             .data = .{
@@ -1973,15 +1974,15 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }
             },
             60 => {
-                _ = self.element_stack.pop();
-                const module = self.element_stack.pop();
+                _ = try self.element_stack.pop();
+                const module = try self.element_stack.pop();
                 return module.?.data.node;
             },
             63 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.element_stack.pop();
-                const call = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
+                const call = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .call_statement,
@@ -2016,10 +2017,10 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                         continue;
                     },
                     else => {
-                        _ = self.state_stack.pop();
-                        _ = self.state_stack.pop();
-                        const expression = self.element_stack.pop();
-                        const statements = self.element_stack.pop();
+                        _ = try self.state_stack.pop();
+                        _ = try self.state_stack.pop();
+                        const expression = try self.element_stack.pop();
+                        const statements = try self.element_stack.pop();
 
                         try self.pushASTNode(try self.pool.put(ASTNode{
                             .kind = .block_body,
@@ -2036,10 +2037,10 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }
             },
             66 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                const statment = self.element_stack.pop();
-                const statments = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                const statment = try self.element_stack.pop();
+                const statments = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .statements,
@@ -2062,8 +2063,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                         continue;
                     },
                     else => {
-                        _ = self.state_stack.pop();
-                        const name = self.element_stack.pop();
+                        _ = try self.state_stack.pop();
+                        const name = try self.element_stack.pop();
                         try self.pushASTNode(try self.pool.put(ASTNode{
                             .kind = .identifier,
                             .data = .{
@@ -2079,10 +2080,10 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }
             },
             69, 70 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                const expression = self.element_stack.pop();
-                const attribute = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                const expression = try self.element_stack.pop();
+                const attribute = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .attributed_expression,
                     .data = .{
@@ -2096,12 +2097,12 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .attributed_expression));
             },
             71 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.element_stack.pop();
-                const body = self.element_stack.pop();
-                _ = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
+                const body = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .block,
                     .data = .{
@@ -2114,12 +2115,12 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .block));
             },
             72 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.element_stack.pop();
-                const expressions = self.element_stack.pop();
-                _ = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
+                const expressions = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .wrapped_expressions,
                     .data = .{
@@ -2164,8 +2165,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }
             },
             75 => {
-                _ = self.state_stack.pop();
-                const parameter = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                const parameter = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .function_parameters,
                     .data = .{
@@ -2254,12 +2255,12 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }
             },
             81 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.element_stack.pop();
-                _ = self.element_stack.pop();
-                const name = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
+                const name = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .label_statement,
                     .data = .{
@@ -2269,8 +2270,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                                 error.DecodeFailed => {
                                     return error.ParseFailed;
                                 },
-                                else => {
-                                    return err;
+                                else => |_err| {
+                                    return @errorCast(_err);
                                 },
                             }),
                         },
@@ -2293,12 +2294,12 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }
             },
             83 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                const expression = self.element_stack.pop();
-                _ = self.element_stack.pop();
-                const expressions = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                const expression = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
+                const expressions = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .expressions,
                     .data = .{
@@ -2330,12 +2331,12 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }
             },
             85 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                const identifier = self.element_stack.pop();
-                _ = self.element_stack.pop();
-                const identifiers = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                const identifier = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
+                const identifiers = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .identifier,
                     .data = .{
@@ -2367,12 +2368,12 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }
             },
             88 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                const attribute = self.element_stack.pop();
-                const name = self.element_stack.pop();
-                const access = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                const attribute = try self.element_stack.pop();
+                const name = try self.element_stack.pop();
+                const access = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .assignment_target,
                     .data = .{
@@ -2468,14 +2469,14 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }
             },
             94 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.element_stack.pop();
-                const expressions = self.element_stack.pop();
-                const target = self.element_stack.pop();
-                _ = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
+                const expressions = try self.element_stack.pop();
+                const target = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .continue_statement,
                     .data = .{
@@ -2489,14 +2490,14 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .continue_statement));
             },
             95 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.element_stack.pop();
-                const expressions = self.element_stack.pop();
-                const target = self.element_stack.pop();
-                _ = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
+                const expressions = try self.element_stack.pop();
+                const target = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .break_statement,
                     .data = .{
@@ -2510,14 +2511,14 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .break_statement));
             },
             96 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.element_stack.pop();
-                const expression = self.element_stack.pop();
-                _ = self.element_stack.pop();
-                _ = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
+                const expression = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .runtime_expression,
                     .data = .{
@@ -2530,14 +2531,14 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .runtime_expression));
             },
             97 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.element_stack.pop();
-                const expression = self.element_stack.pop();
-                _ = self.element_stack.pop();
-                const label = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
+                const expression = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
+                const label = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .label_statement,
                     .data = .{
@@ -2551,14 +2552,14 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .label_statement));
             },
             98 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.element_stack.pop();
-                const expressions = self.element_stack.pop();
-                _ = self.element_stack.pop();
-                const target = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
+                const expressions = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
+                const target = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .call,
                     .data = .{
@@ -2572,14 +2573,14 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .call));
             },
             99 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.element_stack.pop();
-                const expressions = self.element_stack.pop();
-                _ = self.element_stack.pop();
-                const target = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
+                const expressions = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
+                const target = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .assignment_statement,
                     .data = .{
@@ -2593,10 +2594,10 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .assignment_statement));
             },
             100 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                const expression = self.element_stack.pop();
-                _ = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                const expression = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .type_attribute,
                     .data = .{
@@ -2622,12 +2623,12 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }
             },
             102 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                const parameter = self.element_stack.pop();
-                _ = self.element_stack.pop();
-                const parameters = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                const parameter = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
+                const parameters = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .function_parameters,
                     .data = .{
@@ -2698,8 +2699,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }
             },
             106 => {
-                _ = self.state_stack.pop();
-                const attribute = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                const attribute = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .function_attributes,
                     .data = .{
@@ -2713,8 +2714,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .function_attributes));
             },
             107, 108 => {
-                _ = self.state_stack.pop();
-                const attribute = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                const attribute = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .function_attribute,
                     .data = .{
@@ -2727,12 +2728,12 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .function_attribute));
             },
             109 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                const attribute = self.element_stack.pop();
-                const name = self.element_stack.pop();
-                const access = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                const attribute = try self.element_stack.pop();
+                const name = try self.element_stack.pop();
+                const access = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .function_parameter,
                     .data = .{
@@ -2778,8 +2779,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }
             },
             113 => {
-                _ = self.state_stack.pop();
-                const case = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                const case = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .match_cases,
                     .data = .{
@@ -2793,10 +2794,10 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .match_cases));
             },
             117 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                const attribute = self.element_stack.pop();
-                const attributes = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                const attribute = try self.element_stack.pop();
+                const attributes = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .function_attributes,
                     .data = .{
@@ -2862,8 +2863,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }
             },
             121 => {
-                _ = self.state_stack.pop();
-                const entry = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                const entry = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .type_entries,
                     .data = .{
@@ -2890,20 +2891,20 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }
             },
             123 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.element_stack.pop();
-                const cases = self.element_stack.pop();
-                _ = self.element_stack.pop();
-                _ = self.element_stack.pop();
-                const expression = self.element_stack.pop();
-                _ = self.element_stack.pop();
-                _ = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
+                const cases = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
+                const expression = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .match_expression,
                     .data = .{
@@ -2917,10 +2918,10 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .match_expression));
             },
             124 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                const case = self.element_stack.pop();
-                const cases = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                const case = try self.element_stack.pop();
+                const cases = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .match_cases,
@@ -2978,10 +2979,10 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                         index += 1;
                     },
                     else => {
-                        _ = self.state_stack.pop();
-                        _ = self.state_stack.pop();
-                        const expression = self.element_stack.pop();
-                        _ = self.element_stack.pop();
+                        _ = try self.state_stack.pop();
+                        _ = try self.state_stack.pop();
+                        const expression = try self.element_stack.pop();
+                        _ = try self.element_stack.pop();
 
                         try self.pushASTNode(try self.pool.put(ASTNode{
                             .kind = .function_body,
@@ -2997,20 +2998,20 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }
             },
             128 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.element_stack.pop();
-                const body = self.element_stack.pop();
-                const attributes = self.element_stack.pop();
-                _ = self.element_stack.pop();
-                const parameters = self.element_stack.pop();
-                _ = self.element_stack.pop();
-                _ = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
+                const body = try self.element_stack.pop();
+                const attributes = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
+                const parameters = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .function,
                     .data = .{
@@ -3038,8 +3039,8 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }
             },
             130 => {
-                _ = self.state_stack.pop();
-                const attribute = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                const attribute = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .type_attribute_optional,
@@ -3053,20 +3054,20 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .type_attribute_optional));
             },
             131 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.element_stack.pop();
-                const entries = self.element_stack.pop();
-                _ = self.element_stack.pop();
-                _ = self.element_stack.pop();
-                const expression = self.element_stack.pop();
-                _ = self.element_stack.pop();
-                _ = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
+                const entries = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
+                const expression = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .type,
                     .data = .{
@@ -3080,10 +3081,10 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .type));
             },
             132 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                const entry = self.element_stack.pop();
-                const entries = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                const entry = try self.element_stack.pop();
+                const entries = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .type_entries,
@@ -3098,14 +3099,14 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .type_entries));
             },
             134 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.element_stack.pop();
-                const expression = self.element_stack.pop();
-                _ = self.element_stack.pop();
-                _ = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
+                const expression = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .function_external_attribute,
@@ -3119,14 +3120,14 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .function_external_attribute));
             },
             135 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.element_stack.pop();
-                const expression = self.element_stack.pop();
-                _ = self.element_stack.pop();
-                _ = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
+                const expression = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .function_internal_attribute,
@@ -3140,12 +3141,12 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .function_internal_attribute));
             },
             136 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.element_stack.pop();
-                const expression = self.element_stack.pop();
-                const name = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
+                const expression = try self.element_stack.pop();
+                const name = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .type_entry,
@@ -3178,16 +3179,16 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }
             },
             138 => {
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.state_stack.pop();
-                _ = self.element_stack.pop();
-                const expression = self.element_stack.pop();
-                _ = self.element_stack.pop();
-                const condition = self.element_stack.pop();
-                _ = self.element_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
+                const expression = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
+                const condition = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
                     .kind = .match_case,
@@ -3232,8 +3233,8 @@ fn decodeChar(source: [:0]u8, token: Tokenizer.Token, reporter: *Error.Reporter,
                     return error.DecodeFailed;
                 },
                 '\\' => {
-                    from = index;
                     index += 1;
+                    from = index;
                     continue :ct .escaped;
                 },
                 '\'' => {
@@ -3269,6 +3270,23 @@ fn decodeChar(source: [:0]u8, token: Tokenizer.Token, reporter: *Error.Reporter,
                 },
                 't' => {
                     source[write] = '\t';
+                    index += 1;
+                    write += 1;
+                    if (source[index] == 0) {
+                        try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Unexpected EOF!", .{});
+                        return error.DecodeFailed;
+                    }
+                    if (source[index] != '\'') {
+                        try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Cannot decode non-single-byte char!", .{});
+                        return error.DecodeFailed;
+                    } else {
+                        source[write] = '\'';
+                        write += 1;
+                    }
+                    return source[write - 1];
+                },
+                '\\' => {
+                    source[write] = '\\';
                     index += 1;
                     write += 1;
                     if (source[index] == 0) {
@@ -3358,7 +3376,7 @@ fn decodeChar(source: [:0]u8, token: Tokenizer.Token, reporter: *Error.Reporter,
                 },
                 'x' => {
                     index += 1;
-                    from = index;
+                    from += 1;
                     continue :ct .escaped_hex;
                 },
                 else => {
@@ -3412,6 +3430,7 @@ fn decodeChar(source: [:0]u8, token: Tokenizer.Token, reporter: *Error.Reporter,
     }
 }
 
+// Assume the string start with ", end with "
 fn decodeString(source: [:0]u8, token: Tokenizer.Token, reporter: *Error.Reporter, io: std.Io, filename: u32) error{ DecodeFailed, OutOfMemory }![]u8 {
     var from = token.start + 1;
     var index = from;
@@ -3432,8 +3451,8 @@ fn decodeString(source: [:0]u8, token: Tokenizer.Token, reporter: *Error.Reporte
                     return error.DecodeFailed;
                 },
                 '\\' => {
-                    from = index;
                     index += 1;
+                    from = index;
                     continue :ct .escaped;
                 },
                 '"' => {
@@ -3472,6 +3491,12 @@ fn decodeString(source: [:0]u8, token: Tokenizer.Token, reporter: *Error.Reporte
                     write += 1;
                     continue :ct .start;
                 },
+                '\\' => {
+                    source[write] = '\\';
+                    index += 1;
+                    write += 1;
+                    continue :ct .start;
+                },
                 '\'' => {
                     source[write] = '\'';
                     index += 1;
@@ -3486,6 +3511,7 @@ fn decodeString(source: [:0]u8, token: Tokenizer.Token, reporter: *Error.Reporte
                 },
                 'x' => {
                     index += 1;
+                    from += 1;
                     continue :ct .escaped_hex;
                 },
                 else => {

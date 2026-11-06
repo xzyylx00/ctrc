@@ -25,7 +25,7 @@ pub const ASTNodePool = Pool(ASTNodeHandle, Self, 4096);
 pub const Kind = enum(u8) {
     module = 0,
     expressions,
-    non_attributed_expression,
+    non_attributed_expressions,
     wrapped_expressions,
     expression,
     block,
@@ -38,8 +38,8 @@ pub const Kind = enum(u8) {
     function_parameter,
     function_attributes,
     function_attribute,
-    function_internal_attribute,
     function_external_attribute,
+    function_internal_attribute,
     function_body,
     call,
     runtime_expression,
@@ -114,7 +114,7 @@ const Data = union(Kind) {
         attribute: ASTNodeHandle,
     },
     function_attributes: struct {
-        prev: ASTNodeHandle,
+        prev: ?ASTNodeHandle,
         attribute: ASTNodeHandle,
     },
     function_attribute: struct {
@@ -137,7 +137,7 @@ const Data = union(Kind) {
         expression: ASTNodeHandle,
     },
     literal: struct {
-        kind: enum {
+        const LiteralKind = enum {
             string,
             integer,
             float,
@@ -145,11 +145,12 @@ const Data = union(Kind) {
             identifier,
             macro,
             nil,
-        },
-        data: union {
+        };
+        kind: LiteralKind,
+        data: union(LiteralKind) {
             string: StringPool.StringHandle,
             integer: usize,
-            float: f64,
+            float: u64, // f64 cannot be hashed
             char: u8,
             identifier: ASTNodeHandle,
             macro: StringPool.StringHandle,
