@@ -35,6 +35,7 @@ pub const Kind = enum(u8) {
     match_case,
     function,
     function_parameters,
+    function_parameters_optional,
     function_parameter,
     function_attributes,
     function_attribute,
@@ -107,6 +108,9 @@ const Data = union(Kind) {
     function_parameters: struct {
         prev: ?ASTNodeHandle,
         parameter: ASTNodeHandle,
+    },
+    function_parameters_optional: struct {
+        parameters: ?ASTNodeHandle,
     },
     function_parameter: struct {
         access: ASTNodeHandle,
