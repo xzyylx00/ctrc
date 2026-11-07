@@ -1111,7 +1111,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .assignment_target,
                     .data = .{
                         .assignment_target = .{
                             .access = null,
@@ -1168,7 +1167,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .access_attribute,
                     .data = .{
                         .access_attribute = .{
                             .direction = .in,
@@ -1183,7 +1181,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .access_attribute,
                     .data = .{
                         .access_attribute = .{
                             .direction = .out,
@@ -1198,7 +1195,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .access_attribute,
                     .data = .{
                         .access_attribute = .{
                             .direction = .inout,
@@ -1213,7 +1209,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .pointer_attribute,
                     .data = .{
                         .pointer_attribute = .{
                             .kind = .ref,
@@ -1228,7 +1223,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .pointer_attribute,
                     .data = .{
                         .pointer_attribute = .{
                             .kind = .ptr,
@@ -1289,7 +1283,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                         const name = try self.element_stack.pop();
 
                         try self.pushASTNode(try self.pool.put(ASTNode{
-                            .kind = .identifier,
                             .data = .{
                                 .identifier = .{
                                     .name = try string_pool.put(source[name.?.data.token.start..name.?.data.token.end]),
@@ -1307,7 +1300,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 const string = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .literal,
                     .data = .{
                         .literal = .{
                             .data = .{
@@ -1320,7 +1312,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                                     },
                                 }),
                             },
-                            .kind = .string,
                         },
                     },
                 }));
@@ -1340,13 +1331,11 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 };
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .literal,
                     .data = .{
                         .literal = .{
                             .data = .{
                                 .integer = value,
                             },
-                            .kind = .integer,
                         },
                     },
                 }));
@@ -1366,13 +1355,11 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 };
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .literal,
                     .data = .{
                         .literal = .{
                             .data = .{
                                 .float = @bitCast(value),
                             },
-                            .kind = .float,
                         },
                     },
                 }));
@@ -1392,13 +1379,11 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 };
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .literal,
                     .data = .{
                         .literal = .{
                             .data = .{
                                 .char = value,
                             },
-                            .kind = .char,
                         },
                     },
                 }));
@@ -1410,7 +1395,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 const string = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .literal,
                     .data = .{
                         .literal = .{
                             .data = .{
@@ -1423,7 +1407,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                                     },
                                 }),
                             },
-                            .kind = .macro,
                         },
                     },
                 }));
@@ -1435,13 +1418,11 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .literal,
                     .data = .{
                         .literal = .{
                             .data = .{
                                 .nil = {},
                             },
-                            .kind = .nil,
                         },
                     },
                 }));
@@ -1473,7 +1454,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                         const expression = try self.element_stack.pop();
 
                         try self.pushASTNode(try self.pool.put(ASTNode{
-                            .kind = .block_body,
                             .data = .{
                                 .block_body = .{
                                     .expression = expression.?.data.node,
@@ -1507,7 +1487,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                         const expressions = try self.element_stack.pop();
 
                         try self.pushASTNode(try self.pool.put(ASTNode{
-                            .kind = .non_attributed_expressions,
                             .data = .{
                                 .non_attributed_expressions = .{
                                     .expressions = expressions.?.data.node,
@@ -1522,7 +1501,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                         const expressions = try self.element_stack.pop();
 
                         try self.pushASTNode(try self.pool.put(ASTNode{
-                            .kind = .expression,
                             .data = .{
                                 .expression = .{
                                     .expression = expressions.?.data.node,
@@ -1539,7 +1517,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 const expression = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .expressions,
                     .data = .{
                         .expressions = .{
                             .expression = expression.?.data.node,
@@ -1555,7 +1532,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 const expression = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .module,
                     .data = .{
                         .module = .{
                             .body = expression.?.data.node,
@@ -1577,7 +1553,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                         const expressions = try self.element_stack.pop();
 
                         try self.pushASTNode(try self.pool.put(ASTNode{
-                            .kind = .non_attributed_expressions,
                             .data = .{
                                 .non_attributed_expressions = .{
                                     .expressions = expressions.?.data.node,
@@ -1592,7 +1567,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                         const expressions = try self.element_stack.pop();
 
                         try self.pushASTNode(try self.pool.put(ASTNode{
-                            .kind = .expression,
                             .data = .{
                                 .expression = .{
                                     .expression = expressions.?.data.node,
@@ -1615,7 +1589,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                         _ = try self.state_stack.pop();
                         const target = try self.element_stack.pop();
                         try self.pushASTNode(try self.pool.put(ASTNode{
-                            .kind = .assignment_target,
                             .data = .{
                                 .assignment_target = .{
                                     .access = null,
@@ -1632,13 +1605,11 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                         _ = try self.state_stack.pop();
                         const value = try self.element_stack.pop();
                         try self.pushASTNode(try self.pool.put(ASTNode{
-                            .kind = .literal,
                             .data = .{
                                 .literal = .{
                                     .data = .{
                                         .identifier = value.?.data.node,
                                     },
-                                    .kind = .identifier,
                                 },
                             },
                         }));
@@ -1652,7 +1623,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 const statement = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .statements,
                     .data = .{
                         .statements = .{
                             .prev = null,
@@ -1668,7 +1638,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 const statement = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .statement,
                     .data = .{
                         .statement = .{
                             .statement = statement.?.data.node,
@@ -1850,7 +1819,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 const attributed_expression = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .expression,
                     .data = .{
                         .expression = .{
                             .expression = attributed_expression.?.data.node,
@@ -1878,7 +1846,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 const name = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .identifier,
                     .data = .{
                         .identifier = .{
                             .name = try string_pool.put(decodeIdentifier(source, name.?.data.token, reporter, io, filename) catch |err| switch (err) {
@@ -1926,13 +1893,11 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                         _ = try self.state_stack.pop();
                         const value = try self.element_stack.pop();
                         try self.pushASTNode(try self.pool.put(ASTNode{
-                            .kind = .literal,
                             .data = .{
                                 .literal = .{
                                     .data = .{
                                         .identifier = value.?.data.node,
                                     },
-                                    .kind = .identifier,
                                 },
                             },
                         }));
@@ -1960,7 +1925,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                     else => {
                         try self.pushASTNode(try self.pool.put(ASTNode{
-                            .kind = .function_parameters_optional,
                             .data = .{
                                 .function_parameters_optional = .{
                                     .parameters = null,
@@ -2004,7 +1968,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 const call = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .call_statement,
                     .data = .{
                         .call_statement = .{
                             .call = call.?.data.node,
@@ -2042,7 +2005,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                         const statements = try self.element_stack.pop();
 
                         try self.pushASTNode(try self.pool.put(ASTNode{
-                            .kind = .block_body,
                             .data = .{
                                 .block_body = .{
                                     .expression = expression.?.data.node,
@@ -2062,7 +2024,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 const statments = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .statements,
                     .data = .{
                         .statements = .{
                             .prev = statments.?.data.node,
@@ -2085,7 +2046,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                         _ = try self.state_stack.pop();
                         const name = try self.element_stack.pop();
                         try self.pushASTNode(try self.pool.put(ASTNode{
-                            .kind = .identifier,
                             .data = .{
                                 .identifier = .{
                                     .name = try string_pool.put(source[name.?.data.token.start..name.?.data.token.end]),
@@ -2104,7 +2064,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 const expression = try self.element_stack.pop();
                 const attribute = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .attributed_expression,
                     .data = .{
                         .attributed_expression = .{
                             .attribute = attribute.?.data.node,
@@ -2123,7 +2082,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 const body = try self.element_stack.pop();
                 _ = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .block,
                     .data = .{
                         .block = .{
                             .body = body.?.data.node,
@@ -2141,7 +2099,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 const expressions = try self.element_stack.pop();
                 _ = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .wrapped_expressions,
                     .data = .{
                         .wrapped_expressions = .{
                             .expressions = expressions.?.data.node,
@@ -2189,7 +2146,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                         _ = try self.state_stack.pop();
                         const parameters = try self.element_stack.pop();
                         try self.pushASTNode(try self.pool.put(ASTNode{
-                            .kind = .function_parameters_optional,
                             .data = .{
                                 .function_parameters_optional = .{
                                     .parameters = parameters.?.data.node,
@@ -2205,7 +2161,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.state_stack.pop();
                 const parameter = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .function_parameters,
                     .data = .{
                         .function_parameters = .{
                             .parameter = parameter.?.data.node,
@@ -2299,7 +2254,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.element_stack.pop();
                 const name = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .label_statement,
                     .data = .{
                         .label_statement = .{
                             .expression = null,
@@ -2338,7 +2292,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.element_stack.pop();
                 const expressions = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .expressions,
                     .data = .{
                         .expressions = .{
                             .expression = expression.?.data.node,
@@ -2375,7 +2328,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.element_stack.pop();
                 const identifiers = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .identifier,
                     .data = .{
                         .identifier = .{
                             .name = try string_pool.put(source[identifier.?.data.token.start..identifier.?.data.token.end]),
@@ -2412,7 +2364,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 const name = try self.element_stack.pop();
                 const access = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .assignment_target,
                     .data = .{
                         .assignment_target = .{
                             .access = access.?.data.node,
@@ -2452,7 +2403,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                     else => {
                         try self.pushASTNode(try self.pool.put(ASTNode{
-                            .kind = .function_attributes_optional,
                             .data = .{
                                 .function_attributes_optional = .{
                                     .attributes = null,
@@ -2523,7 +2473,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 const target = try self.element_stack.pop();
                 _ = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .continue_statement,
                     .data = .{
                         .continue_statement = .{
                             .expressions = expressions.?.data.node,
@@ -2544,7 +2493,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 const target = try self.element_stack.pop();
                 _ = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .break_statement,
                     .data = .{
                         .break_statement = .{
                             .expressions = expressions.?.data.node,
@@ -2565,7 +2513,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.element_stack.pop();
                 _ = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .runtime_expression,
                     .data = .{
                         .runtime_expression = .{
                             .expression = expression.?.data.node,
@@ -2585,7 +2532,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.element_stack.pop();
                 const label = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .label_statement,
                     .data = .{
                         .label_statement = .{
                             .expression = expression.?.data.node,
@@ -2606,7 +2552,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.element_stack.pop();
                 const target = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .call,
                     .data = .{
                         .call = .{
                             .target = target.?.data.node,
@@ -2627,7 +2572,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.element_stack.pop();
                 const target = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .assignment_statement,
                     .data = .{
                         .assignment_statement = .{
                             .expressions = expressions.?.data.node,
@@ -2644,7 +2588,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 const expression = try self.element_stack.pop();
                 _ = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .type_attribute,
                     .data = .{
                         .type_attribute = .{
                             .expression = expression.?.data.node,
@@ -2702,7 +2645,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                     else => {
                         try self.pushASTNode(try self.pool.put(ASTNode{
-                            .kind = .function_body,
                             .data = .{
                                 .function_body = .{
                                     .expression = null,
@@ -2730,7 +2672,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                         _ = try self.state_stack.pop();
                         const attributes = try self.element_stack.pop();
                         try self.pushASTNode(try self.pool.put(ASTNode{
-                            .kind = .function_attributes_optional,
                             .data = .{
                                 .function_attributes_optional = .{
                                     .attributes = attributes.?.data.node,
@@ -2746,7 +2687,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.state_stack.pop();
                 const attribute = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .function_attributes,
                     .data = .{
                         .function_attributes = .{
                             .attribute = attribute.?.data.node,
@@ -2761,7 +2701,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.state_stack.pop();
                 const attribute = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .function_attribute,
                     .data = .{
                         .function_attribute = .{
                             .attribute = attribute.?.data.node,
@@ -2779,7 +2718,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.element_stack.pop();
                 const parameters = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .function_parameters,
                     .data = .{
                         .function_parameters = .{
                             .parameter = parameter.?.data.node,
@@ -2798,7 +2736,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 const name = try self.element_stack.pop();
                 const access = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .function_parameter,
                     .data = .{
                         .function_parameter = .{
                             .access = access.?.data.node,
@@ -2845,7 +2782,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.state_stack.pop();
                 const case = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .match_cases,
                     .data = .{
                         .match_cases = .{
                             .case = case.?.data.node,
@@ -2875,7 +2811,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 const attribute = try self.element_stack.pop();
                 const attributes = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .function_attributes,
                     .data = .{
                         .function_attributes = .{
                             .attribute = attribute.?.data.node,
@@ -2895,7 +2830,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                     else => {
                         try self.pushASTNode(try self.pool.put(ASTNode{
-                            .kind = .type_attribute_optional,
                             .data = .{
                                 .type_attribute_optional = .{
                                     .attribute = null,
@@ -2929,7 +2863,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.state_stack.pop();
                 const entry = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .type_entries,
                     .data = .{
                         .type_entries = .{
                             .entry = entry.?.data.node,
@@ -2969,7 +2902,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.element_stack.pop();
                 _ = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .match_expression,
                     .data = .{
                         .match_expression = .{
                             .cases = cases.?.data.node,
@@ -2987,7 +2919,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 const cases = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .match_cases,
                     .data = .{
                         .match_cases = .{
                             .cases = cases.?.data.node,
@@ -3048,7 +2979,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                         _ = try self.element_stack.pop();
 
                         try self.pushASTNode(try self.pool.put(ASTNode{
-                            .kind = .function_body,
                             .data = .{
                                 .function_body = .{
                                     .expression = expression.?.data.node,
@@ -3076,7 +3006,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.element_stack.pop();
                 _ = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .function,
                     .data = .{
                         .function = .{
                             .attributes = attributes.?.data.node,
@@ -3106,7 +3035,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 const attribute = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .type_attribute_optional,
                     .data = .{
                         .type_attribute_optional = .{
                             .attribute = attribute.?.data.node,
@@ -3132,7 +3060,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.element_stack.pop();
                 _ = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .type,
                     .data = .{
                         .type = .{
                             .entries = entries.?.data.node,
@@ -3150,7 +3077,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 const entries = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .type_entries,
                     .data = .{
                         .type_entries = .{
                             .entry = entry.?.data.node,
@@ -3172,7 +3098,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .function_external_attribute,
                     .data = .{
                         .function_external_attribute = .{
                             .expression = expression.?.data.node,
@@ -3193,7 +3118,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .function_internal_attribute,
                     .data = .{
                         .function_internal_attribute = .{
                             .expression = expression.?.data.node,
@@ -3212,7 +3136,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 const name = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .type_entry,
                     .data = .{
                         .type_entry = .{
                             .expression = expression.?.data.node,
@@ -3254,7 +3177,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 _ = try self.element_stack.pop();
 
                 try self.pushASTNode(try self.pool.put(ASTNode{
-                    .kind = .match_case,
                     .data = .{
                         .match_case = .{
                             .expression = condition.?.data.node,
@@ -3266,7 +3188,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .match_case));
             },
             255 => {
-                try reporter.add(io, .@"error", filename, 1, 1, "", .{});
+                try reporter.add(io, .@"error", filename, 1, 1, "Unexpected state! Please report this as a bug.", .{});
                 return error.ParseFailed;
             },
             else => unreachable,

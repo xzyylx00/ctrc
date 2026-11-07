@@ -99,7 +99,6 @@ pub const Access = enum {
 };
 
 name: StringPool.StringHandle,
-kind: Kind,
 data: Data,
 access: Access,
 runtime: bool,

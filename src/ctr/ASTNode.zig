@@ -154,7 +154,6 @@ const Data = union(Kind) {
             macro,
             nil,
         };
-        kind: LiteralKind,
         data: union(LiteralKind) {
             string: StringPool.StringHandle,
             integer: usize,
@@ -241,5 +240,4 @@ const Data = union(Kind) {
     },
 };
 
-kind: Kind,
 data: Data,

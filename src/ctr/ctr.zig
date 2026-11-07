@@ -22,3 +22,5 @@ pub const Tokenizer = @import("Tokenizer.zig");
 pub const Pool = @import("Pool.zig").Pool;
 pub const Module = @import("Module.zig");
 pub const Parser = @import("Parser.zig");
+
+pub const PossibleHandle = u64;
