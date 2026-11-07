@@ -37,6 +37,7 @@ pub const Kind = enum(u8) {
     function_parameters,
     function_parameters_optional,
     function_parameter,
+    function_attributes_optional,
     function_attributes,
     function_attribute,
     function_external_attribute,
@@ -116,6 +117,9 @@ const Data = union(Kind) {
         access: ASTNodeHandle,
         name: StringPool.StringHandle,
         attribute: ASTNodeHandle,
+    },
+    function_attributes_optional: struct {
+        attributes: ?ASTNodeHandle,
     },
     function_attributes: struct {
         prev: ?ASTNodeHandle,

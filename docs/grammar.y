@@ -14,10 +14,11 @@ BlockBody: Statements Expressions | Expressions
 MatchExpression: MATCH LPAREN Expression RPAREN LBRACE MatchCases RBRACE
 MatchCases: MatchCases MatchCase | MatchCase
 MatchCase: CASE Expression COLON Expressions SEMI
-Function: FUNCTION LPAREN FunctionParametersOptional RPAREN FunctionAttributes FunctionBody PERCENT
+Function: FUNCTION LPAREN FunctionParametersOptional RPAREN FunctionAttributesOptional FunctionBody PERCENT
 FunctionParametersOptional: FunctionParameters | /* empty */
 FunctionParameters: FunctionParameters COMMA FunctionParameter | FunctionParameter
 FunctionParameter: AccessAttribute IDENTIFIER TypeAttribute
+FunctionAttributesOptional: FunctionAttributes | /* empty */
 FunctionAttributes: FunctionAttributes FunctionAttribute | FunctionAttribute
 FunctionAttribute: FunctionExternalAttribute | FunctionInternalAttribute
 FunctionExternalAttribute: EXTERNAL LPAREN Expressions RPAREN
