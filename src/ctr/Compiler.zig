@@ -28,6 +28,7 @@ symbol_pool: Symbol.SymbolPool,
 function_parameter_pool: Symbol.FunctionParameterPool,
 module_pool: Module.ModulePool,
 dependency_pool: Module.DependencyPool,
+allocator: std.mem.Allocator,
 
 pub fn init(allocator: std.mem.Allocator) error{OutOfMemory}!Self {
     var ast_node_pool = try ASTNode.ASTNodePool.init(allocator);
@@ -55,6 +56,7 @@ pub fn init(allocator: std.mem.Allocator) error{OutOfMemory}!Self {
         .dependency_pool = dependency_pool,
         .ast_node_pool = ast_node_pool,
         .function_parameter_pool = function_parameter_pool,
+        .allocator = allocator,
     };
 }
 
@@ -70,11 +72,6 @@ pub fn deinit(self: *Self) void {
     return;
 }
 
-pub fn loadModule(self: *Self, source: [:0]const u8) error{OutOfMemory}!void {
-    _ = self;
-    _ = source;
-}
-
-pub fn resolveModule(self: *Self) error{OutOfMemory}!void {
+pub fn resolveModule(self: *Self, root_module: Module.ModuleHandle) error{OutOfMemory}!void {
     _ = self;
 }

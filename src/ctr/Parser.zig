@@ -3649,12 +3649,9 @@ fn decodeInteger(source: [:0]u8, token: Tokenizer.Token, reporter: *Error.Report
 
 fn decodeFloat(source: [:0]u8, token: Tokenizer.Token, reporter: *Error.Reporter, io: std.Io, filename: u32) error{ DecodeFailed, OutOfMemory }!f64 {
     _ = source;
-    _ = token;
-    _ = reporter;
-    _ = io;
-    _ = filename;
     // Stub
-    return 0;
+    try reporter.add(io, .@"error", filename, token.line, token.pos, "Cannot parse float value now. Please wait for it.", .{});
+    return error.DecodeFailed;
 }
 
 fn reportUnexpectedToken(reporter: *Error.Reporter, io: std.Io, filename: u32, token: Tokenizer.Token) error{OutOfMemory}!void {

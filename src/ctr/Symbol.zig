@@ -29,13 +29,13 @@ const Pool = @import("Pool.zig").Pool;
 pub const FunctionParameterPool = Pool(FunctionParameterHandle, FunctionParameter, 1024);
 pub const MatchCasePool = Pool(MatchCaseHandle, MatchCase, 2048);
 pub const SymbolPool = Pool(SymbolHandle, Self, 8192);
-
+pub const TypeConstructEntryPool = Pool(TypeConstructEntryHandle, TypeConstructEntry, 1024);
 pub const SymbolHandle = u32;
 
 pub const FunctionParameter = struct {
     access: Access,
     next: ?FunctionParameterHandle,
-    expression: ASTNode.ASTNodeHandle,
+    expression: SymbolHandle,
     name: StringPool.StringHandle,
 };
 
@@ -48,17 +48,16 @@ pub const FunctionAttribute = struct {
 
 pub const MatchCase = struct {
     next: ?MatchCaseHandle,
-    condition: ASTNode.ASTNodeHandle,
-    expression: ASTNode.ASTNodeHandle,
+    condition: SymbolHandle,
+    expression: SymbolHandle,
 };
 
 pub const MatchCaseHandle = u32;
 
 pub const TypeConstructEntry = struct {
     name: ?StringPool.StringHandle,
-    expression: ?ASTNode.ASTNodeHandle,
+    expression: ?SymbolHandle,
 };
-
 pub const TypeConstructEntryHandle = u32;
 
 pub const Kind = enum {
@@ -67,6 +66,7 @@ pub const Kind = enum {
     match,
     type,
     label,
+    block,
 };
 
 const Data = union(Kind) {
@@ -74,20 +74,20 @@ const Data = union(Kind) {
     function: struct {
         parameter: ?FunctionParameter,
         attribute: ?FunctionAttribute,
-        @"return": ?ASTNode.ASTNodeHandle,
-        expression: ?ASTNode.ASTNodeHandle,
+        @"return": ?SymbolHandle,
+        expression: ?SymbolHandle,
     },
     match: struct {
         case: ?MatchCaseHandle,
-        expression: ASTNode.ASTNodeHandle,
+        expression: SymbolHandle,
     },
     type: struct {
-        constructor: ASTNode.ASTNodeHandle,
+        constructor: SymbolHandle,
         list: TypeConstructEntryHandle,
     },
     label: struct {
         name: StringPool.StringHandle,
-        expression: ASTNode.ASTNodeHandle,
+        expression: SymbolHandle,
     },
 };
 
@@ -99,6 +99,7 @@ pub const Access = enum {
 };
 
 name: StringPool.StringHandle,
+type: ?SymbolHandle,
 data: Data,
 access: Access,
 runtime: bool,

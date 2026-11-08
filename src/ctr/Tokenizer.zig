@@ -715,7 +715,7 @@ pub fn LexedArray(tokenizer: *Tokenizer, allocator: std.mem.Allocator, io: std.I
         }
 
         var is_exculded = false;
-        for (exculded) |_exculded| {
+        inline for (exculded) |_exculded| {
             if (_exculded == token.kind) {
                 is_exculded = true;
                 break;
@@ -734,4 +734,24 @@ pub fn LexedArray(tokenizer: *Tokenizer, allocator: std.mem.Allocator, io: std.I
     try list.append(allocator, token);
 
     return list.toOwnedSlice(allocator);
+}
+
+pub fn filterOut(tokens: []Token, allocator: std.mem.Allocator, comptime exculded: []const Token.Kind) error{OutOfMemory}![]Token.Kind {
+    var write: usize = 0;
+
+    for (tokens) |token| {
+        var is_exculded = false;
+        inline for (exculded) |_exculded| {
+            if (token.kind == _exculded) {
+                is_exculded = true;
+            }
+        }
+
+        if (!is_exculded) {
+            tokens[write] = token;
+            write += 1;
+        }
+    }
+
+    return try allocator.realloc(tokens, write);
 }
