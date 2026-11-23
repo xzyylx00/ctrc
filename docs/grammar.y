@@ -24,7 +24,7 @@ FunctionAttribute: FunctionExternalAttribute | FunctionInternalAttribute
 FunctionExternalAttribute: EXTERNAL LPAREN Expressions RPAREN
 FunctionInternalAttribute: INTERNAL LPAREN Expressions RPAREN
 FunctionBody:  COLON Expressions | /* empty */
-Call: NonAttributedExpression LPAREN Expressions RPAREN
+Call: NonAttributedExpression LPAREN Expressions RPAREN | NonAttributedExpression LPAREN RPAREN
 RuntimeExpression: RUNTIME LPAREN Expression RPAREN
 Literal: STRING | INTEGER | FLOAT | CHAR | Identifier | MACRO | NIL
 Identifier: Identifier DOT IDENTIFIER | IDENTIFIER

@@ -16,11 +16,17 @@
 
 const std = @import("std");
 
-pub fn Pool(comptime Handle: type, comptime Data: type, comptime default_size: usize) type {
+pub fn Pool(comptime Handle: type, comptime Data: type, comptime default_size: usize, comptime ctx: anytype) type {
     return struct {
         const Self = @This();
 
-        const Map = std.AutoHashMapUnmanaged(Data, Handle);
+        const Map = blk: {
+            if (@backingInt(@typeInfo(@TypeOf(ctx))) != @backingInt(std.lang.Type.null)) {
+                break :blk std.HashMapUnmanaged(Data, Handle, ctx, 80);
+            } else {
+                break :blk std.AutoArrayHashMapUnmanaged(Data, Handle);
+            }
+        };
         const Back = []Data;
         map: Map,
         back: Back,

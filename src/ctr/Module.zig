@@ -24,7 +24,7 @@ const Error = @import("Error.zig");
 const std = @import("std");
 pub const ModuleHandle = u32;
 
-pub const ModulePool = Pool(ModuleHandle, Self, 32);
+pub const ModulePool = Pool(ModuleHandle, Self, 32, null);
 
 pub const Dependency = struct {
     name: StringPool.StringHandle,
@@ -34,7 +34,7 @@ pub const Dependency = struct {
 
 pub const DependencyHandle = u32;
 
-pub const DependencyPool = Pool(DependencyHandle, Dependency, 32);
+pub const DependencyPool = Pool(DependencyHandle, Dependency, 32, null);
 
 dependency: ?DependencyHandle,
 root_ast_node: ?ASTNode.ASTNodeHandle,

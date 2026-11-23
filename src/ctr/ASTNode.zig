@@ -20,7 +20,7 @@ pub const ASTNodeHandle = u32;
 const StringPool = @import("StringPool.zig");
 const Self = @This();
 
-pub const ASTNodePool = Pool(ASTNodeHandle, Self, 4096);
+pub const ASTNodePool = Pool(ASTNodeHandle, Self, 4096, null);
 
 pub const Kind = enum(u8) {
     module = 0,
@@ -139,7 +139,7 @@ const Data = union(Kind) {
     },
     call: struct {
         target: ASTNodeHandle,
-        arguments: ASTNodeHandle,
+        arguments: ?ASTNodeHandle,
     },
     runtime_expression: struct {
         expression: ASTNodeHandle,

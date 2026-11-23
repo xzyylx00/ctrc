@@ -135,14 +135,13 @@ fn isShiftable(state: u8, kind: Tokenizer.Token.Kind) bool {
         57,
         58,
         61,
-        62,
         67,
-        88,
-        113,
-        116,
+        89,
+        114,
         117,
         118,
-        135,
+        119,
+        136,
         => switch (kind) {
             .l_brace,
             .l_paren,
@@ -170,8 +169,8 @@ fn isShiftable(state: u8, kind: Tokenizer.Token.Kind) bool {
         6,
         14,
         24,
-        103,
         104,
+        105,
         => switch (kind) {
             .l_paren => true,
             else => false,
@@ -180,16 +179,16 @@ fn isShiftable(state: u8, kind: Tokenizer.Token.Kind) bool {
         13,
         64,
         77,
-        112,
+        113,
         => switch (kind) {
             .identifier => true,
             else => false,
         },
         15,
         68,
-        93,
-        121,
-        124,
+        94,
+        122,
+        125,
         => switch (kind) {
             .colon => true,
             else => false,
@@ -201,14 +200,14 @@ fn isShiftable(state: u8, kind: Tokenizer.Token.Kind) bool {
         23,
         65,
         75,
-        129,
+        130,
         => switch (kind) {
             .comma => true,
             else => false,
         },
         31,
         83,
-        131,
+        132,
         => switch (kind) {
             .semicolon => true,
             else => false,
@@ -237,16 +236,16 @@ fn isShiftable(state: u8, kind: Tokenizer.Token.Kind) bool {
             else => false,
         },
         49,
-        85,
-        127,
+        86,
         128,
+        129,
         => switch (kind) {
             .comma,
             .r_paren,
             => true,
             else => false,
         },
-        54, 92 => switch (kind) {
+        54, 93 => switch (kind) {
             .keyword_in,
             .keyword_out,
             .keyword_inout,
@@ -256,6 +255,29 @@ fn isShiftable(state: u8, kind: Tokenizer.Token.Kind) bool {
         59 => switch (kind) {
             .semicolon,
             .keyword_match,
+            => true,
+            else => false,
+        },
+        62 => switch (kind) {
+            .l_brace,
+            .l_paren,
+            .r_paren,
+            .keyword_match,
+            .keyword_function,
+            .keyword_type,
+            .keyword_in,
+            .keyword_out,
+            .keyword_inout,
+            .keyword_ref,
+            .keyword_ptr,
+            .keyword_runtime,
+            .identifier,
+            .string,
+            .integer,
+            .float,
+            .char,
+            .macro,
+            .keyword_nil,
             => true,
             else => false,
         },
@@ -269,52 +291,52 @@ fn isShiftable(state: u8, kind: Tokenizer.Token.Kind) bool {
         },
         79,
         80,
-        87,
-        139,
+        88,
+        140,
         => switch (kind) {
             .comma,
             .semicolon,
             => true,
             else => false,
         },
-        90,
-        94,
+        91,
+        95,
         => switch (kind) {
             .l_brace => true,
             else => false,
         },
-        91 => switch (kind) {
+        92 => switch (kind) {
             .keyword_external,
             .keyword_internal,
             => true,
             else => false,
         },
-        102 => switch (kind) {
+        103 => switch (kind) {
             .keyword_case => true,
             else => false,
         },
-        105 => switch (kind) {
+        106 => switch (kind) {
             .colon,
             => true,
             else => false,
         },
-        106 => switch (kind) {
+        107 => switch (kind) {
             .keyword_external,
             .keyword_internal,
             => true,
             else => false,
         },
-        114 => switch (kind) {
+        115 => switch (kind) {
             .r_brace,
             .keyword_case,
             => true,
             else => false,
         },
-        119 => switch (kind) {
+        120 => switch (kind) {
             .percent => true,
             else => false,
         },
-        122 => switch (kind) {
+        123 => switch (kind) {
             .r_brace,
             .identifier,
             => true,
@@ -613,7 +635,7 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
         },
         62 => {
             return switch (node_kind) {
-                .expressions => 85,
+                .expressions => 86,
                 .non_attributed_expressions => 24,
                 .wrapped_expressions => 25,
                 .expression => 26,
@@ -633,7 +655,7 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
         },
         67 => {
             return switch (node_kind) {
-                .expressions => 87,
+                .expressions => 88,
                 .non_attributed_expressions => 24,
                 .wrapped_expressions => 25,
                 .expression => 26,
@@ -653,15 +675,15 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
         },
         68 => {
             return switch (node_kind) {
-                .type_attribute => 89,
+                .type_attribute => 90,
                 else => unreachable,
             };
         },
-        88 => {
+        89 => {
             return switch (node_kind) {
                 .non_attributed_expressions => 24,
                 .wrapped_expressions => 25,
-                .expression => 101,
+                .expression => 102,
                 .block => 27,
                 .match_expression => 29,
                 .function => 30,
@@ -673,92 +695,65 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
                 .access_attribute => 52,
                 .pointer_attribute => 45,
                 .attributed_expression => 46,
-                else => unreachable,
-            };
-        },
-
-        91 => {
-            return switch (node_kind) {
-                .function_attributes_optional => 105,
-                .function_attributes => 106,
-                .function_attribute => 107,
-                .function_external_attribute => 108,
-                .function_internal_attribute => 109,
                 else => unreachable,
             };
         },
         92 => {
             return switch (node_kind) {
-                .function_parameter => 110,
-                .access_attribute => 77,
+                .function_attributes_optional => 106,
+                .function_attributes => 107,
+                .function_attribute => 108,
+                .function_external_attribute => 109,
+                .function_internal_attribute => 110,
                 else => unreachable,
             };
         },
         93 => {
             return switch (node_kind) {
-                .type_attribute => 111,
+                .function_parameter => 111,
+                .access_attribute => 77,
                 else => unreachable,
             };
         },
-        102 => {
+        94 => {
             return switch (node_kind) {
-                .match_cases => 114,
-                .match_case => 115,
+                .type_attribute => 112,
                 else => unreachable,
             };
         },
-        105 => {
+        103 => {
             return switch (node_kind) {
-                .function_body => 119,
+                .match_cases => 115,
+                .match_case => 116,
                 else => unreachable,
             };
         },
         106 => {
             return switch (node_kind) {
-                .function_attribute => 120,
-                .function_external_attribute => 108,
-                .function_internal_attribute => 109,
+                .function_body => 120,
                 else => unreachable,
             };
         },
-        112 => {
+        107 => {
             return switch (node_kind) {
-                .type_entries => 122,
-                .type_entry => 123,
+                .function_attribute => 121,
+                .function_external_attribute => 109,
+                .function_internal_attribute => 110,
                 else => unreachable,
             };
         },
         113 => {
             return switch (node_kind) {
-                .non_attributed_expressions => 24,
-                .wrapped_expressions => 25,
-                .expression => 124,
-                .block => 27,
-                .match_expression => 29,
-                .function => 30,
-                .call => 50,
-                .runtime_expression => 32,
-                .literal => 33,
-                .identifier => 51,
-                .type => 35,
-                .access_attribute => 52,
-                .pointer_attribute => 45,
-                .attributed_expression => 46,
+                .type_entries => 123,
+                .type_entry => 124,
                 else => unreachable,
             };
         },
         114 => {
             return switch (node_kind) {
-                .match_case => 126,
-                else => unreachable,
-            };
-        },
-        116 => {
-            return switch (node_kind) {
-                .expressions => 127,
                 .non_attributed_expressions => 24,
                 .wrapped_expressions => 25,
-                .expression => 26,
+                .expression => 125,
                 .block => 27,
                 .match_expression => 29,
                 .function => 30,
@@ -770,6 +765,12 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
                 .access_attribute => 52,
                 .pointer_attribute => 45,
                 .attributed_expression => 46,
+                else => unreachable,
+            };
+        },
+        115 => {
+            return switch (node_kind) {
+                .match_case => 127,
                 else => unreachable,
             };
         },
@@ -813,22 +814,42 @@ fn getReduceGoto(state: u32, node_kind: ASTNode.Kind) u8 {
                 else => unreachable,
             };
         },
-        121 => {
+        119 => {
             return switch (node_kind) {
-                .type_attribute_optional => 131,
-                .type_attribute => 132,
+                .expressions => 130,
+                .non_attributed_expressions => 24,
+                .wrapped_expressions => 25,
+                .expression => 26,
+                .block => 27,
+                .match_expression => 29,
+                .function => 30,
+                .call => 50,
+                .runtime_expression => 32,
+                .literal => 33,
+                .identifier => 51,
+                .type => 35,
+                .access_attribute => 52,
+                .pointer_attribute => 45,
+                .attributed_expression => 46,
                 else => unreachable,
             };
         },
         122 => {
             return switch (node_kind) {
-                .type_entry => 134,
+                .type_attribute_optional => 132,
+                .type_attribute => 133,
                 else => unreachable,
             };
         },
-        135 => {
+        123 => {
             return switch (node_kind) {
-                .expressions => 139,
+                .type_entry => 135,
+                else => unreachable,
+            };
+        },
+        136 => {
+            return switch (node_kind) {
+                .expressions => 140,
                 .non_attributed_expressions => 24,
                 .wrapped_expressions => 25,
                 .expression => 26,
@@ -999,14 +1020,13 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
             57,
             58,
             61,
-            62,
             67,
-            88,
-            113,
-            116,
+            89,
+            114,
             117,
             118,
-            135,
+            119,
+            136,
             => {
                 switch (tokens[index].kind) {
                     .l_brace => {
@@ -1480,7 +1500,15 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }
             },
-            25, 27, 29, 30, 32, 33, 35, 50 => {
+            25,
+            27,
+            29,
+            30,
+            32,
+            33,
+            35,
+            50,
+            => {
                 switch (tokens[index].kind) {
                     .l_paren => {
                         _ = try self.state_stack.pop();
@@ -1961,6 +1989,109 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 const module = try self.element_stack.pop();
                 return module.?.data.node;
             },
+            62 => {
+                switch (tokens[index].kind) {
+                    .l_brace => {
+                        try self.state_stack.push(1);
+                        try self.pushToken(&tokens[index]);
+                        index += 1;
+                    },
+                    .l_paren => {
+                        try self.state_stack.push(2);
+                        try self.pushToken(&tokens[index]);
+                        index += 1;
+                    },
+                    .r_paren => {
+                        try self.state_stack.push(85);
+                        try self.pushToken(&tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_match => {
+                        try self.state_stack.push(4);
+                        try self.pushToken(&tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_function => {
+                        try self.state_stack.push(5);
+                        try self.pushToken(&tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_type => {
+                        try self.state_stack.push(6);
+                        try self.pushToken(&tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_in => {
+                        try self.state_stack.push(7);
+                        try self.pushToken(&tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_out => {
+                        try self.state_stack.push(8);
+                        try self.pushToken(&tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_inout => {
+                        try self.state_stack.push(9);
+                        try self.pushToken(&tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_ref => {
+                        try self.state_stack.push(10);
+                        try self.pushToken(&tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_ptr => {
+                        try self.state_stack.push(11);
+                        try self.pushToken(&tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_runtime => {
+                        try self.state_stack.push(14);
+                        try self.pushToken(&tokens[index]);
+                        index += 1;
+                    },
+                    .identifier => {
+                        try self.state_stack.push(48);
+                        try self.pushToken(&tokens[index]);
+                        index += 1;
+                    },
+                    .string => {
+                        try self.state_stack.push(16);
+                        try self.pushToken(&tokens[index]);
+                        index += 1;
+                    },
+                    .integer => {
+                        try self.state_stack.push(17);
+                        try self.pushToken(&tokens[index]);
+                        index += 1;
+                    },
+                    .float => {
+                        try self.state_stack.push(18);
+                        try self.pushToken(&tokens[index]);
+                        index += 1;
+                    },
+                    .char => {
+                        try self.state_stack.push(19);
+                        try self.pushToken(&tokens[index]);
+                        index += 1;
+                    },
+                    .macro => {
+                        try self.state_stack.push(20);
+                        try self.pushToken(&tokens[index]);
+                        index += 1;
+                    },
+                    .keyword_nil => {
+                        try self.state_stack.push(21);
+                        try self.pushToken(&tokens[index]);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
             63 => {
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
@@ -1981,7 +2112,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 switch (tokens[index].kind) {
                     .identifier => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(86);
+                        try self.state_stack.push(87);
                         index += 1;
                     },
                     else => {
@@ -2037,7 +2168,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
             68 => {
                 switch (tokens[index].kind) {
                     .colon => {
-                        try self.state_stack.push(88);
+                        try self.state_stack.push(89);
                         try self.pushToken(&tokens[index]);
                         index += 1;
                         continue;
@@ -2111,7 +2242,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
             73 => {
                 switch (tokens[index].kind) {
                     .r_paren => {
-                        try self.state_stack.push(90);
+                        try self.state_stack.push(91);
                         try self.pushToken(&tokens[index]);
                         index += 1;
                         continue;
@@ -2126,7 +2257,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 switch (tokens[index].kind) {
                     .r_paren => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(91);
+                        try self.state_stack.push(92);
                         index += 1;
                     },
                     else => {
@@ -2139,7 +2270,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 switch (tokens[index].kind) {
                     .comma => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(92);
+                        try self.state_stack.push(93);
                         index += 1;
                     },
                     else => {
@@ -2175,7 +2306,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 switch (tokens[index].kind) {
                     .identifier => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(93);
+                        try self.state_stack.push(94);
                         index += 1;
                     },
                     else => {
@@ -2188,7 +2319,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 switch (tokens[index].kind) {
                     .r_paren => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(94);
+                        try self.state_stack.push(95);
                         index += 1;
                     },
                     else => {
@@ -2206,7 +2337,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                     .semicolon => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(95);
+                        try self.state_stack.push(96);
                         index += 1;
                     },
                     else => {
@@ -2224,7 +2355,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                     .semicolon => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(96);
+                        try self.state_stack.push(97);
                         index += 1;
                     },
                     else => {
@@ -2237,7 +2368,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 switch (tokens[index].kind) {
                     .r_paren => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(97);
+                        try self.state_stack.push(98);
                         index += 1;
                     },
                     else => {
@@ -2275,7 +2406,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 switch (tokens[index].kind) {
                     .semicolon => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(98);
+                        try self.state_stack.push(99);
                         index += 1;
                     },
                     else => {
@@ -2303,6 +2434,24 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .expressions));
             },
             85 => {
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.state_stack.pop();
+                _ = try self.element_stack.pop();
+                _ = try self.element_stack.pop();
+                const expression = try self.element_stack.pop();
+                try self.pushASTNode(try self.pool.put(ASTNode{
+                    .data = .{
+                        .call = .{
+                            .target = expression.?.data.node,
+                            .arguments = null,
+                        },
+                    },
+                }));
+
+                try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .call));
+            },
+            86 => {
                 switch (tokens[index].kind) {
                     .comma => {
                         try self.pushToken(&tokens[index]);
@@ -2311,7 +2460,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                     .r_paren => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(99);
+                        try self.state_stack.push(100);
                         index += 1;
                     },
                     else => {
@@ -2320,7 +2469,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }
             },
-            86 => {
+            87 => {
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
@@ -2338,7 +2487,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .identifier));
             },
-            87 => {
+            88 => {
                 switch (tokens[index].kind) {
                     .comma => {
                         try self.pushToken(&tokens[index]);
@@ -2347,7 +2496,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                     .semicolon => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(100);
+                        try self.state_stack.push(101);
                         index += 1;
                     },
                     else => {
@@ -2356,7 +2505,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }
             },
-            89 => {
+            90 => {
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
@@ -2376,11 +2525,11 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .assignment_target));
             },
-            90 => {
+            91 => {
                 switch (tokens[index].kind) {
                     .l_brace => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(102);
+                        try self.state_stack.push(103);
                         index += 1;
                     },
                     else => {
@@ -2389,16 +2538,16 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }
             },
-            91 => {
+            92 => {
                 switch (tokens[index].kind) {
                     .keyword_external => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(103);
+                        try self.state_stack.push(104);
                         index += 1;
                     },
                     .keyword_internal => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(104);
+                        try self.state_stack.push(105);
                         index += 1;
                     },
                     else => {
@@ -2414,7 +2563,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }
             },
-            92 => {
+            93 => {
                 switch (tokens[index].kind) {
                     .keyword_in => {
                         try self.pushToken(&tokens[index]);
@@ -2437,24 +2586,11 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }
             },
-            93 => {
+            94 => {
                 switch (tokens[index].kind) {
                     .colon => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(88);
-                        index += 1;
-                    },
-                    else => {
-                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
-                        index = try self.skipUntilAcceptable(tokens, index);
-                    },
-                }
-            },
-            94 => {
-                switch (tokens[index].kind) {
-                    .l_brace => {
-                        try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(112);
+                        try self.state_stack.push(89);
                         index += 1;
                     },
                     else => {
@@ -2464,6 +2600,19 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }
             },
             95 => {
+                switch (tokens[index].kind) {
+                    .l_brace => {
+                        try self.pushToken(&tokens[index]);
+                        try self.state_stack.push(113);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            96 => {
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
@@ -2483,7 +2632,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .continue_statement));
             },
-            96 => {
+            97 => {
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
@@ -2503,7 +2652,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .break_statement));
             },
-            97 => {
+            98 => {
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
@@ -2522,7 +2671,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .runtime_expression));
             },
-            98 => {
+            99 => {
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
@@ -2542,7 +2691,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .label_statement));
             },
-            99 => {
+            100 => {
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
@@ -2562,7 +2711,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .call));
             },
-            100 => {
+            101 => {
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
@@ -2582,7 +2731,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .assignment_statement));
             },
-            101 => {
+            102 => {
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
                 const expression = try self.element_stack.pop();
@@ -2597,24 +2746,11 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .type_attribute));
             },
-            102 => {
+            103 => {
                 switch (tokens[index].kind) {
                     .keyword_case => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(113);
-                        index += 1;
-                    },
-                    else => {
-                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
-                        index = try self.skipUntilAcceptable(tokens, index);
-                    },
-                }
-            },
-            103 => {
-                switch (tokens[index].kind) {
-                    .l_paren => {
-                        try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(116);
+                        try self.state_stack.push(114);
                         index += 1;
                     },
                     else => {
@@ -2638,9 +2774,22 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
             },
             105 => {
                 switch (tokens[index].kind) {
-                    .colon => {
+                    .l_paren => {
                         try self.pushToken(&tokens[index]);
                         try self.state_stack.push(118);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            106 => {
+                switch (tokens[index].kind) {
+                    .colon => {
+                        try self.pushToken(&tokens[index]);
+                        try self.state_stack.push(119);
                         index += 1;
                     },
                     else => {
@@ -2656,16 +2805,16 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }
             },
-            106 => {
+            107 => {
                 switch (tokens[index].kind) {
                     .keyword_external => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(103);
+                        try self.state_stack.push(104);
                         index += 1;
                     },
                     .keyword_internal => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(104);
+                        try self.state_stack.push(105);
                         index += 1;
                     },
                     else => {
@@ -2683,7 +2832,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }
             },
-            107 => {
+            108 => {
                 _ = try self.state_stack.pop();
                 const attribute = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
@@ -2697,7 +2846,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .function_attributes));
             },
-            108, 109 => {
+            109, 110 => {
                 _ = try self.state_stack.pop();
                 const attribute = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
@@ -2710,7 +2859,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .function_attribute));
             },
-            110 => {
+            111 => {
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
@@ -2728,7 +2877,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .function_parameters));
             },
-            111 => {
+            112 => {
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
@@ -2747,11 +2896,11 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .function_parameter));
             },
-            112 => {
+            113 => {
                 switch (tokens[index].kind) {
                     .identifier => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(121);
+                        try self.state_stack.push(122);
                         index += 1;
                     },
                     else => {
@@ -2760,7 +2909,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }
             },
-            114 => {
+            115 => {
                 switch (tokens[index].kind) {
                     .r_brace => {
                         try self.pushToken(&tokens[index]);
@@ -2778,7 +2927,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }
             },
-            115 => {
+            116 => {
                 _ = try self.state_stack.pop();
                 const case = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
@@ -2792,11 +2941,11 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .match_cases));
             },
-            119 => {
+            120 => {
                 switch (tokens[index].kind) {
                     .percent => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(130);
+                        try self.state_stack.push(131);
                         index += 1;
                     },
                     else => {
@@ -2805,7 +2954,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }
             },
-            120 => {
+            121 => {
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
                 const attribute = try self.element_stack.pop();
@@ -2821,11 +2970,11 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .function_attributes));
             },
-            121 => {
+            122 => {
                 switch (tokens[index].kind) {
                     .colon => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(88);
+                        try self.state_stack.push(89);
                         index += 1;
                     },
                     else => {
@@ -2841,16 +2990,16 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }
             },
-            122 => {
+            123 => {
                 switch (tokens[index].kind) {
                     .r_brace => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(133);
+                        try self.state_stack.push(134);
                         index += 1;
                     },
                     .identifier => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(121);
+                        try self.state_stack.push(122);
                         index += 1;
                     },
                     else => {
@@ -2859,7 +3008,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }
             },
-            123 => {
+            124 => {
                 _ = try self.state_stack.pop();
                 const entry = try self.element_stack.pop();
                 try self.pushASTNode(try self.pool.put(ASTNode{
@@ -2873,11 +3022,11 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .type_entries));
             },
-            124 => {
+            125 => {
                 switch (tokens[index].kind) {
                     .colon => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(135);
+                        try self.state_stack.push(136);
                         index += 1;
                     },
                     else => {
@@ -2886,7 +3035,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }
             },
-            125 => {
+            126 => {
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
@@ -2912,7 +3061,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .match_expression));
             },
-            126 => {
+            127 => {
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
                 const case = try self.element_stack.pop();
@@ -2928,24 +3077,6 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                 }));
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .match_cases));
-            },
-            127 => {
-                switch (tokens[index].kind) {
-                    .comma => {
-                        try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(61);
-                        index += 1;
-                    },
-                    .r_paren => {
-                        try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(136);
-                        index += 1;
-                    },
-                    else => {
-                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
-                        index = try self.skipUntilAcceptable(tokens, index);
-                    },
-                }
             },
             128 => {
                 switch (tokens[index].kind) {
@@ -2972,6 +3103,24 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                         try self.state_stack.push(61);
                         index += 1;
                     },
+                    .r_paren => {
+                        try self.pushToken(&tokens[index]);
+                        try self.state_stack.push(138);
+                        index += 1;
+                    },
+                    else => {
+                        try reportUnexpectedToken(reporter, io, filename, tokens[index]);
+                        index = try self.skipUntilAcceptable(tokens, index);
+                    },
+                }
+            },
+            130 => {
+                switch (tokens[index].kind) {
+                    .comma => {
+                        try self.pushToken(&tokens[index]);
+                        try self.state_stack.push(61);
+                        index += 1;
+                    },
                     else => {
                         _ = try self.state_stack.pop();
                         _ = try self.state_stack.pop();
@@ -2990,7 +3139,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }
             },
-            130 => {
+            131 => {
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
@@ -3017,11 +3166,11 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .function));
             },
-            131 => {
+            132 => {
                 switch (tokens[index].kind) {
                     .semicolon => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(138);
+                        try self.state_stack.push(139);
                         index += 1;
                     },
                     else => {
@@ -3030,7 +3179,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }
             },
-            132 => {
+            133 => {
                 _ = try self.state_stack.pop();
                 const attribute = try self.element_stack.pop();
 
@@ -3044,7 +3193,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .type_attribute_optional));
             },
-            133 => {
+            134 => {
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
@@ -3070,7 +3219,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .type));
             },
-            134 => {
+            135 => {
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
                 const entry = try self.element_stack.pop();
@@ -3087,7 +3236,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .type_entries));
             },
-            136 => {
+            137 => {
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
@@ -3107,7 +3256,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .function_external_attribute));
             },
-            137 => {
+            138 => {
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
@@ -3127,7 +3276,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .function_internal_attribute));
             },
-            138 => {
+            139 => {
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
@@ -3146,7 +3295,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 
                 try self.state_stack.push(getReduceGoto(self.state_stack.top() orelse 255, .type_entry));
             },
-            139 => {
+            140 => {
                 switch (tokens[index].kind) {
                     .comma => {
                         try self.pushToken(&tokens[index]);
@@ -3155,7 +3304,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                     .semicolon => {
                         try self.pushToken(&tokens[index]);
-                        try self.state_stack.push(140);
+                        try self.state_stack.push(141);
                         index += 1;
                     },
                     else => {
@@ -3164,7 +3313,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
                     },
                 }
             },
-            140 => {
+            141 => {
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
                 _ = try self.state_stack.pop();
@@ -3199,7 +3348,7 @@ pub fn parse(self: *Self, io: std.Io, reporter: *Error.Reporter, filename: u32, 
 // We don't support multiple-bytes charactor right now.
 // Write the token length back, so formatter could use it.
 fn decodeChar(source: [:0]u8, token: *Tokenizer.Token, reporter: *Error.Reporter, io: std.Io, filename: u32) error{ DecodeFailed, OutOfMemory }!u8 {
-    var from = token.start + 1;
+    const from = token.start + 1;
     var index = from;
     var write = from;
 
@@ -3388,7 +3537,6 @@ fn decodeChar(source: [:0]u8, token: *Tokenizer.Token, reporter: *Error.Reporter
                 try reporter.add(io, .@"error", filename, token.line, index - token.start + token.pos, "Unexpected EOF!", .{});
                 return error.DecodeFailed;
             } else if (std.ascii.isHex(source[index])) {
-                from = index;
                 index += 1;
                 continue :ct .escaped_hex2;
             } else if (source[index] == '\'') {
@@ -3415,7 +3563,7 @@ fn decodeChar(source: [:0]u8, token: *Tokenizer.Token, reporter: *Error.Reporter
                     return error.DecodeFailed;
                 }
                 var buf: [2]u8 = undefined;
-                const result = std.fmt.hexToBytes(&buf, source[from..index]) catch unreachable;
+                const result = std.fmt.hexToBytes(&buf, source[index - 2 .. index]) catch unreachable;
                 source[write] = result[0];
                 write += 1;
                 source[write] = '\'';
@@ -3462,6 +3610,7 @@ fn decodeString(source: [:0]u8, token: *Tokenizer.Token, reporter: *Error.Report
                     return source[from..write];
                 },
                 else => {
+                    source[write] = source[index];
                     index += 1;
                     write += 1;
                     continue :ct .start;
@@ -3482,12 +3631,6 @@ fn decodeString(source: [:0]u8, token: *Tokenizer.Token, reporter: *Error.Report
                 },
                 'n' => {
                     source[write] = '\n';
-                    index += 1;
-                    write += 1;
-                    continue :ct .start;
-                },
-                'r' => {
-                    source[write] = '\r';
                     index += 1;
                     write += 1;
                     continue :ct .start;

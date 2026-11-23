@@ -26,10 +26,10 @@ const Pool = @import("Pool.zig").Pool;
 // MatchCasePool
 // SymbolPool
 
-pub const FunctionParameterPool = Pool(FunctionParameterHandle, FunctionParameter, 1024);
-pub const MatchCasePool = Pool(MatchCaseHandle, MatchCase, 2048);
-pub const SymbolPool = Pool(SymbolHandle, Self, 8192);
-pub const TypeConstructEntryPool = Pool(TypeConstructEntryHandle, TypeConstructEntry, 1024);
+pub const FunctionParameterPool = Pool(FunctionParameterHandle, FunctionParameter, 1024, null);
+pub const MatchCasePool = Pool(MatchCaseHandle, MatchCase, 2048, null);
+pub const SymbolPool = Pool(SymbolHandle, Self, 8192, null);
+pub const TypeConstructEntryPool = Pool(TypeConstructEntryHandle, TypeConstructEntry, 1024, null);
 pub const SymbolHandle = u32;
 
 pub const FunctionParameter = struct {
@@ -89,6 +89,8 @@ const Data = union(Kind) {
         name: StringPool.StringHandle,
         expression: SymbolHandle,
     },
+    block: void,
+    // ?
 };
 
 pub const Access = enum {

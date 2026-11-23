@@ -73,5 +73,6 @@ pub fn deinit(self: *Self) void {
 }
 
 pub fn resolveModule(self: *Self, root_module: Module.ModuleHandle) error{OutOfMemory}!void {
+    _ = root_module;
     _ = self;
 }

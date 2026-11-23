@@ -67,65 +67,66 @@ Grammar
    44             | ε
 
    45 Call: NonAttributedExpression LPAREN Expressions RPAREN
+   46     | NonAttributedExpression LPAREN RPAREN
 
-   46 RuntimeExpression: RUNTIME LPAREN Expression RPAREN
+   47 RuntimeExpression: RUNTIME LPAREN Expression RPAREN
 
-   47 Literal: STRING
-   48        | INTEGER
-   49        | FLOAT
-   50        | CHAR
-   51        | Identifier
-   52        | MACRO
-   53        | NIL
+   48 Literal: STRING
+   49        | INTEGER
+   50        | FLOAT
+   51        | CHAR
+   52        | Identifier
+   53        | MACRO
+   54        | NIL
 
-   54 Identifier: Identifier DOT IDENTIFIER
-   55           | IDENTIFIER
+   55 Identifier: Identifier DOT IDENTIFIER
+   56           | IDENTIFIER
 
-   56 Type: TYPE LPAREN Expression RPAREN LBRACE TypeEntries RBRACE
+   57 Type: TYPE LPAREN Expression RPAREN LBRACE TypeEntries RBRACE
 
-   57 Statements: Statements Statement
-   58           | Statement
+   58 Statements: Statements Statement
+   59           | Statement
 
-   59 Statement: CallStatement
-   60          | AssignmentStatement
-   61          | ContinueStatement
-   62          | BreakStatement
-   63          | LabelStatement
+   60 Statement: CallStatement
+   61          | AssignmentStatement
+   62          | ContinueStatement
+   63          | BreakStatement
+   64          | LabelStatement
 
-   64 CallStatement: Call SEMI
+   65 CallStatement: Call SEMI
 
-   65 AssignmentStatement: AssignmentTarget EQ Expressions SEMI
+   66 AssignmentStatement: AssignmentTarget EQ Expressions SEMI
 
-   66 AssignmentTarget: AccessAttribute IDENTIFIER TypeAttribute
-   67                 | Identifier
-   68                 | UNDERSCORE
+   67 AssignmentTarget: AccessAttribute IDENTIFIER TypeAttribute
+   68                 | Identifier
+   69                 | UNDERSCORE
 
-   69 ContinueStatement: CONTINUE IDENTIFIER Expressions SEMI
+   70 ContinueStatement: CONTINUE IDENTIFIER Expressions SEMI
 
-   70 BreakStatement: BREAK IDENTIFIER Expressions SEMI
+   71 BreakStatement: BREAK IDENTIFIER Expressions SEMI
 
-   71 LabelStatement: IDENTIFIER COLON MatchExpression SEMI
-   72               | IDENTIFIER COLON SEMI
+   72 LabelStatement: IDENTIFIER COLON MatchExpression SEMI
+   73               | IDENTIFIER COLON SEMI
 
-   73 TypeAttributeOptional: TypeAttribute
-   74                      | ε
+   74 TypeAttributeOptional: TypeAttribute
+   75                      | ε
 
-   75 TypeAttribute: COLON Expression
+   76 TypeAttribute: COLON Expression
 
-   76 TypeEntries: TypeEntries TypeEntry
-   77            | TypeEntry
+   77 TypeEntries: TypeEntries TypeEntry
+   78            | TypeEntry
 
-   78 TypeEntry: IDENTIFIER TypeAttributeOptional SEMI
+   79 TypeEntry: IDENTIFIER TypeAttributeOptional SEMI
 
-   79 AccessAttribute: IN
-   80                | OUT
-   81                | INOUT
+   80 AccessAttribute: IN
+   81                | OUT
+   82                | INOUT
 
-   82 PointerAttribute: PTR
-   83                 | REF
+   83 PointerAttribute: PTR
+   84                 | REF
 
-   84 AttributedExpression: AccessAttribute Expression
-   85                     | PointerAttribute AttributedExpression
+   85 AttributedExpression: AccessAttribute Expression
+   86                     | PointerAttribute AttributedExpression
 
 
 Terminals, with rules where they appear
@@ -133,37 +134,37 @@ Terminals, with rules where they appear
     $end (0) 0
     error (256)
     COMMA (258) 2 32
-    LBRACE (259) 22 25 56
-    RBRACE (260) 22 25 56
-    LPAREN (261) 12 25 29 41 42 45 46 56
-    RPAREN (262) 12 25 29 41 42 45 46 56
-    SEMI (263) 28 64 65 69 70 71 72 78
-    COLON (264) 28 43 71 72 75
-    EQ (265) 65
-    UNDERSCORE (266) 68
+    LBRACE (259) 22 25 57
+    RBRACE (260) 22 25 57
+    LPAREN (261) 12 25 29 41 42 45 46 47 57
+    RPAREN (262) 12 25 29 41 42 45 46 47 57
+    SEMI (263) 28 65 66 70 71 72 73 79
+    COLON (264) 28 43 72 73 76
+    EQ (265) 66
+    UNDERSCORE (266) 69
     PERCENT (267) 29
-    DOT (268) 54
+    DOT (268) 55
     MATCH (269) 25
     CASE (270) 28
     FUNCTION (271) 29
-    TYPE (272) 56
+    TYPE (272) 57
     EXTERNAL (273) 41
     INTERNAL (274) 42
-    IN (275) 79
-    OUT (276) 80
-    INOUT (277) 81
-    REF (278) 83
-    PTR (279) 82
-    CONTINUE (280) 69
-    BREAK (281) 70
-    RUNTIME (282) 46
-    IDENTIFIER (283) 34 54 55 66 69 70 71 72 78
-    STRING (284) 47
-    INTEGER (285) 48
-    FLOAT (286) 49
-    CHAR (287) 50
-    MACRO (288) 52
-    NIL (289) 53
+    IN (275) 80
+    OUT (276) 81
+    INOUT (277) 82
+    REF (278) 84
+    PTR (279) 83
+    CONTINUE (280) 70
+    BREAK (281) 71
+    RUNTIME (282) 47
+    IDENTIFIER (283) 34 55 56 67 70 71 72 73 79
+    STRING (284) 48
+    INTEGER (285) 49
+    FLOAT (286) 50
+    CHAR (287) 51
+    MACRO (288) 53
+    NIL (289) 54
 
 
 Nonterminals, with rules where they appear
@@ -175,16 +176,16 @@ Nonterminals, with rules where they appear
         on right: 0
     Expressions (37)
         on left: 2 3
-        on right: 2 12 23 24 28 41 42 43 45 65 69 70
+        on right: 2 12 23 24 28 41 42 43 45 66 70 71
     NonAttributedExpression (38)
         on left: 4 5 6 7 8 9 10 11
-        on right: 45
+        on right: 45 46
     WrappedExpressions (39)
         on left: 12
         on right: 10 19
     Expression (40)
         on left: 13 14 15 16 17 18 19 20 21
-        on right: 2 3 25 28 46 56 75 84
+        on right: 2 3 25 28 47 57 76 85
     Block (41)
         on left: 22
         on right: 4 13
@@ -193,7 +194,7 @@ Nonterminals, with rules where they appear
         on right: 1 22
     MatchExpression (43)
         on left: 25
-        on right: 8 17 71
+        on right: 8 17 72
     MatchCases (44)
         on left: 26 27
         on right: 25 26
@@ -231,65 +232,65 @@ Nonterminals, with rules where they appear
         on left: 43 44
         on right: 29
     Call (56)
-        on left: 45
-        on right: 5 14 64
+        on left: 45 46
+        on right: 5 14 65
     RuntimeExpression (57)
-        on left: 46
+        on left: 47
         on right: 9 18
     Literal (58)
-        on left: 47 48 49 50 51 52 53
+        on left: 48 49 50 51 52 53 54
         on right: 11 21
     Identifier (59)
-        on left: 54 55
-        on right: 51 54 67
+        on left: 55 56
+        on right: 52 55 68
     Type (60)
-        on left: 56
+        on left: 57
         on right: 7 16
     Statements (61)
-        on left: 57 58
-        on right: 23 57
+        on left: 58 59
+        on right: 23 58
     Statement (62)
-        on left: 59 60 61 62 63
-        on right: 57 58
+        on left: 60 61 62 63 64
+        on right: 58 59
     CallStatement (63)
-        on left: 64
-        on right: 59
-    AssignmentStatement (64)
         on left: 65
         on right: 60
-    AssignmentTarget (65)
-        on left: 66 67 68
-        on right: 65
-    ContinueStatement (66)
-        on left: 69
+    AssignmentStatement (64)
+        on left: 66
         on right: 61
-    BreakStatement (67)
+    AssignmentTarget (65)
+        on left: 67 68 69
+        on right: 66
+    ContinueStatement (66)
         on left: 70
         on right: 62
-    LabelStatement (68)
-        on left: 71 72
+    BreakStatement (67)
+        on left: 71
         on right: 63
+    LabelStatement (68)
+        on left: 72 73
+        on right: 64
     TypeAttributeOptional (69)
-        on left: 73 74
-        on right: 78
+        on left: 74 75
+        on right: 79
     TypeAttribute (70)
-        on left: 75
-        on right: 34 66 73
+        on left: 76
+        on right: 34 67 74
     TypeEntries (71)
-        on left: 76 77
-        on right: 56 76
+        on left: 77 78
+        on right: 57 77
     TypeEntry (72)
-        on left: 78
-        on right: 76 77
+        on left: 79
+        on right: 77 78
     AccessAttribute (73)
-        on left: 79 80 81
-        on right: 34 66 84
+        on left: 80 81 82
+        on right: 34 67 85
     PointerAttribute (74)
-        on left: 82 83
-        on right: 85
+        on left: 83 84
+        on right: 86
     AttributedExpression (75)
-        on left: 84 85
-        on right: 20 85
+        on left: 85 86
+        on right: 20 86
 
 
 State 0
@@ -439,9 +440,9 @@ State 2
 
 State 3
 
-   68 AssignmentTarget: UNDERSCORE •
+   69 AssignmentTarget: UNDERSCORE •
 
-    $default  reduce using rule 68 (AssignmentTarget)
+    $default  reduce using rule 69 (AssignmentTarget)
 
 
 State 4
@@ -460,118 +461,118 @@ State 5
 
 State 6
 
-   56 Type: TYPE • LPAREN Expression RPAREN LBRACE TypeEntries RBRACE
+   57 Type: TYPE • LPAREN Expression RPAREN LBRACE TypeEntries RBRACE
 
     LPAREN  shift, and go to state 55
 
 
 State 7
 
-   79 AccessAttribute: IN •
-
-    $default  reduce using rule 79 (AccessAttribute)
-
-
-State 8
-
-   80 AccessAttribute: OUT •
+   80 AccessAttribute: IN •
 
     $default  reduce using rule 80 (AccessAttribute)
 
 
-State 9
+State 8
 
-   81 AccessAttribute: INOUT •
+   81 AccessAttribute: OUT •
 
     $default  reduce using rule 81 (AccessAttribute)
 
 
+State 9
+
+   82 AccessAttribute: INOUT •
+
+    $default  reduce using rule 82 (AccessAttribute)
+
+
 State 10
 
-   83 PointerAttribute: REF •
+   84 PointerAttribute: REF •
 
-    $default  reduce using rule 83 (PointerAttribute)
+    $default  reduce using rule 84 (PointerAttribute)
 
 
 State 11
 
-   82 PointerAttribute: PTR •
+   83 PointerAttribute: PTR •
 
-    $default  reduce using rule 82 (PointerAttribute)
+    $default  reduce using rule 83 (PointerAttribute)
 
 
 State 12
 
-   69 ContinueStatement: CONTINUE • IDENTIFIER Expressions SEMI
+   70 ContinueStatement: CONTINUE • IDENTIFIER Expressions SEMI
 
     IDENTIFIER  shift, and go to state 56
 
 
 State 13
 
-   70 BreakStatement: BREAK • IDENTIFIER Expressions SEMI
+   71 BreakStatement: BREAK • IDENTIFIER Expressions SEMI
 
     IDENTIFIER  shift, and go to state 57
 
 
 State 14
 
-   46 RuntimeExpression: RUNTIME • LPAREN Expression RPAREN
+   47 RuntimeExpression: RUNTIME • LPAREN Expression RPAREN
 
     LPAREN  shift, and go to state 58
 
 
 State 15
 
-   55 Identifier: IDENTIFIER •
-   71 LabelStatement: IDENTIFIER • COLON MatchExpression SEMI
-   72               | IDENTIFIER • COLON SEMI
+   56 Identifier: IDENTIFIER •
+   72 LabelStatement: IDENTIFIER • COLON MatchExpression SEMI
+   73               | IDENTIFIER • COLON SEMI
 
     COLON  shift, and go to state 59
 
-    $default  reduce using rule 55 (Identifier)
+    $default  reduce using rule 56 (Identifier)
 
 
 State 16
 
-   47 Literal: STRING •
-
-    $default  reduce using rule 47 (Literal)
-
-
-State 17
-
-   48 Literal: INTEGER •
+   48 Literal: STRING •
 
     $default  reduce using rule 48 (Literal)
 
 
-State 18
+State 17
 
-   49 Literal: FLOAT •
+   49 Literal: INTEGER •
 
     $default  reduce using rule 49 (Literal)
 
 
-State 19
+State 18
 
-   50 Literal: CHAR •
+   50 Literal: FLOAT •
 
     $default  reduce using rule 50 (Literal)
 
 
+State 19
+
+   51 Literal: CHAR •
+
+    $default  reduce using rule 51 (Literal)
+
+
 State 20
 
-   52 Literal: MACRO •
+   53 Literal: MACRO •
 
-    $default  reduce using rule 52 (Literal)
+    $default  reduce using rule 53 (Literal)
 
 
 State 21
 
-   53 Literal: NIL •
+   54 Literal: NIL •
 
-    $default  reduce using rule 53 (Literal)
+    $default  reduce using rule 54 (Literal)
 
 
 State 22
@@ -594,6 +595,7 @@ State 23
 State 24
 
    45 Call: NonAttributedExpression • LPAREN Expressions RPAREN
+   46     | NonAttributedExpression • LPAREN RPAREN
 
     LPAREN  shift, and go to state 62
 
@@ -652,7 +654,7 @@ State 31
 
     5 NonAttributedExpression: Call •
    14 Expression: Call •
-   64 CallStatement: Call • SEMI
+   65 CallStatement: Call • SEMI
 
     SEMI  shift, and go to state 63
 
@@ -680,14 +682,14 @@ State 33
 
 State 34
 
-   51 Literal: Identifier •
-   54 Identifier: Identifier • DOT IDENTIFIER
-   67 AssignmentTarget: Identifier •
+   52 Literal: Identifier •
+   55 Identifier: Identifier • DOT IDENTIFIER
+   68 AssignmentTarget: Identifier •
 
     DOT  shift, and go to state 64
 
-    EQ        reduce using rule 67 (AssignmentTarget)
-    $default  reduce using rule 51 (Literal)
+    EQ        reduce using rule 68 (AssignmentTarget)
+    $default  reduce using rule 52 (Literal)
 
 
 State 35
@@ -702,7 +704,7 @@ State 35
 State 36
 
    23 BlockBody: Statements • Expressions
-   57 Statements: Statements • Statement
+   58 Statements: Statements • Statement
 
     LBRACE      shift, and go to state 1
     LPAREN      shift, and go to state 2
@@ -752,57 +754,57 @@ State 36
 
 State 37
 
-   58 Statements: Statement •
+   59 Statements: Statement •
 
-    $default  reduce using rule 58 (Statements)
+    $default  reduce using rule 59 (Statements)
 
 
 State 38
 
-   59 Statement: CallStatement •
-
-    $default  reduce using rule 59 (Statement)
-
-
-State 39
-
-   60 Statement: AssignmentStatement •
+   60 Statement: CallStatement •
 
     $default  reduce using rule 60 (Statement)
 
 
+State 39
+
+   61 Statement: AssignmentStatement •
+
+    $default  reduce using rule 61 (Statement)
+
+
 State 40
 
-   65 AssignmentStatement: AssignmentTarget • EQ Expressions SEMI
+   66 AssignmentStatement: AssignmentTarget • EQ Expressions SEMI
 
     EQ  shift, and go to state 67
 
 
 State 41
 
-   61 Statement: ContinueStatement •
-
-    $default  reduce using rule 61 (Statement)
-
-
-State 42
-
-   62 Statement: BreakStatement •
+   62 Statement: ContinueStatement •
 
     $default  reduce using rule 62 (Statement)
 
 
-State 43
+State 42
 
-   63 Statement: LabelStatement •
+   63 Statement: BreakStatement •
 
     $default  reduce using rule 63 (Statement)
 
 
+State 43
+
+   64 Statement: LabelStatement •
+
+    $default  reduce using rule 64 (Statement)
+
+
 State 44
 
-   66 AssignmentTarget: AccessAttribute • IDENTIFIER TypeAttribute
-   84 AttributedExpression: AccessAttribute • Expression
+   67 AssignmentTarget: AccessAttribute • IDENTIFIER TypeAttribute
+   85 AttributedExpression: AccessAttribute • Expression
 
     LBRACE      shift, and go to state 1
     LPAREN      shift, and go to state 2
@@ -841,7 +843,7 @@ State 44
 
 State 45
 
-   85 AttributedExpression: PointerAttribute • AttributedExpression
+   86 AttributedExpression: PointerAttribute • AttributedExpression
 
     IN     shift, and go to state 7
     OUT    shift, and go to state 8
@@ -870,9 +872,9 @@ State 47
 
 State 48
 
-   55 Identifier: IDENTIFIER •
+   56 Identifier: IDENTIFIER •
 
-    $default  reduce using rule 55 (Identifier)
+    $default  reduce using rule 56 (Identifier)
 
 
 State 49
@@ -895,17 +897,17 @@ State 50
 
 State 51
 
-   51 Literal: Identifier •
-   54 Identifier: Identifier • DOT IDENTIFIER
+   52 Literal: Identifier •
+   55 Identifier: Identifier • DOT IDENTIFIER
 
     DOT  shift, and go to state 64
 
-    $default  reduce using rule 51 (Literal)
+    $default  reduce using rule 52 (Literal)
 
 
 State 52
 
-   84 AttributedExpression: AccessAttribute • Expression
+   85 AttributedExpression: AccessAttribute • Expression
 
     LBRACE      shift, and go to state 1
     LPAREN      shift, and go to state 2
@@ -999,7 +1001,7 @@ State 54
 
 State 55
 
-   56 Type: TYPE LPAREN • Expression RPAREN LBRACE TypeEntries RBRACE
+   57 Type: TYPE LPAREN • Expression RPAREN LBRACE TypeEntries RBRACE
 
     LBRACE      shift, and go to state 1
     LPAREN      shift, and go to state 2
@@ -1038,7 +1040,7 @@ State 55
 
 State 56
 
-   69 ContinueStatement: CONTINUE IDENTIFIER • Expressions SEMI
+   70 ContinueStatement: CONTINUE IDENTIFIER • Expressions SEMI
 
     LBRACE      shift, and go to state 1
     LPAREN      shift, and go to state 2
@@ -1078,7 +1080,7 @@ State 56
 
 State 57
 
-   70 BreakStatement: BREAK IDENTIFIER • Expressions SEMI
+   71 BreakStatement: BREAK IDENTIFIER • Expressions SEMI
 
     LBRACE      shift, and go to state 1
     LPAREN      shift, and go to state 2
@@ -1118,7 +1120,7 @@ State 57
 
 State 58
 
-   46 RuntimeExpression: RUNTIME LPAREN • Expression RPAREN
+   47 RuntimeExpression: RUNTIME LPAREN • Expression RPAREN
 
     LBRACE      shift, and go to state 1
     LPAREN      shift, and go to state 2
@@ -1157,8 +1159,8 @@ State 58
 
 State 59
 
-   71 LabelStatement: IDENTIFIER COLON • MatchExpression SEMI
-   72               | IDENTIFIER COLON • SEMI
+   72 LabelStatement: IDENTIFIER COLON • MatchExpression SEMI
+   73               | IDENTIFIER COLON • SEMI
 
     SEMI   shift, and go to state 82
     MATCH  shift, and go to state 4
@@ -1215,9 +1217,11 @@ State 61
 State 62
 
    45 Call: NonAttributedExpression LPAREN • Expressions RPAREN
+   46     | NonAttributedExpression LPAREN • RPAREN
 
     LBRACE      shift, and go to state 1
     LPAREN      shift, and go to state 2
+    RPAREN      shift, and go to state 85
     MATCH       shift, and go to state 4
     FUNCTION    shift, and go to state 5
     TYPE        shift, and go to state 6
@@ -1235,7 +1239,7 @@ State 62
     MACRO       shift, and go to state 20
     NIL         shift, and go to state 21
 
-    Expressions              go to state 85
+    Expressions              go to state 86
     NonAttributedExpression  go to state 24
     WrappedExpressions       go to state 25
     Expression               go to state 26
@@ -1254,16 +1258,16 @@ State 62
 
 State 63
 
-   64 CallStatement: Call SEMI •
+   65 CallStatement: Call SEMI •
 
-    $default  reduce using rule 64 (CallStatement)
+    $default  reduce using rule 65 (CallStatement)
 
 
 State 64
 
-   54 Identifier: Identifier DOT • IDENTIFIER
+   55 Identifier: Identifier DOT • IDENTIFIER
 
-    IDENTIFIER  shift, and go to state 86
+    IDENTIFIER  shift, and go to state 87
 
 
 State 65
@@ -1278,14 +1282,14 @@ State 65
 
 State 66
 
-   57 Statements: Statements Statement •
+   58 Statements: Statements Statement •
 
-    $default  reduce using rule 57 (Statements)
+    $default  reduce using rule 58 (Statements)
 
 
 State 67
 
-   65 AssignmentStatement: AssignmentTarget EQ • Expressions SEMI
+   66 AssignmentStatement: AssignmentTarget EQ • Expressions SEMI
 
     LBRACE      shift, and go to state 1
     LPAREN      shift, and go to state 2
@@ -1306,7 +1310,7 @@ State 67
     MACRO       shift, and go to state 20
     NIL         shift, and go to state 21
 
-    Expressions              go to state 87
+    Expressions              go to state 88
     NonAttributedExpression  go to state 24
     WrappedExpressions       go to state 25
     Expression               go to state 26
@@ -1325,28 +1329,28 @@ State 67
 
 State 68
 
-   55 Identifier: IDENTIFIER •
-   66 AssignmentTarget: AccessAttribute IDENTIFIER • TypeAttribute
+   56 Identifier: IDENTIFIER •
+   67 AssignmentTarget: AccessAttribute IDENTIFIER • TypeAttribute
 
-    COLON  shift, and go to state 88
+    COLON  shift, and go to state 89
 
-    $default  reduce using rule 55 (Identifier)
+    $default  reduce using rule 56 (Identifier)
 
-    TypeAttribute  go to state 89
+    TypeAttribute  go to state 90
 
 
 State 69
 
-   84 AttributedExpression: AccessAttribute Expression •
+   85 AttributedExpression: AccessAttribute Expression •
 
-    $default  reduce using rule 84 (AttributedExpression)
+    $default  reduce using rule 85 (AttributedExpression)
 
 
 State 70
 
-   85 AttributedExpression: PointerAttribute AttributedExpression •
+   86 AttributedExpression: PointerAttribute AttributedExpression •
 
-    $default  reduce using rule 85 (AttributedExpression)
+    $default  reduce using rule 86 (AttributedExpression)
 
 
 State 71
@@ -1367,14 +1371,14 @@ State 73
 
    25 MatchExpression: MATCH LPAREN Expression • RPAREN LBRACE MatchCases RBRACE
 
-    RPAREN  shift, and go to state 90
+    RPAREN  shift, and go to state 91
 
 
 State 74
 
    29 Function: FUNCTION LPAREN FunctionParametersOptional • RPAREN FunctionAttributesOptional FunctionBody PERCENT
 
-    RPAREN  shift, and go to state 91
+    RPAREN  shift, and go to state 92
 
 
 State 75
@@ -1382,7 +1386,7 @@ State 75
    30 FunctionParametersOptional: FunctionParameters •
    32 FunctionParameters: FunctionParameters • COMMA FunctionParameter
 
-    COMMA  shift, and go to state 92
+    COMMA  shift, and go to state 93
 
     $default  reduce using rule 30 (FunctionParametersOptional)
 
@@ -1398,53 +1402,53 @@ State 77
 
    34 FunctionParameter: AccessAttribute • IDENTIFIER TypeAttribute
 
-    IDENTIFIER  shift, and go to state 93
+    IDENTIFIER  shift, and go to state 94
 
 
 State 78
 
-   56 Type: TYPE LPAREN Expression • RPAREN LBRACE TypeEntries RBRACE
+   57 Type: TYPE LPAREN Expression • RPAREN LBRACE TypeEntries RBRACE
 
-    RPAREN  shift, and go to state 94
+    RPAREN  shift, and go to state 95
 
 
 State 79
 
     2 Expressions: Expressions • COMMA Expression
-   69 ContinueStatement: CONTINUE IDENTIFIER Expressions • SEMI
-
-    COMMA  shift, and go to state 61
-    SEMI   shift, and go to state 95
-
-
-State 80
-
-    2 Expressions: Expressions • COMMA Expression
-   70 BreakStatement: BREAK IDENTIFIER Expressions • SEMI
+   70 ContinueStatement: CONTINUE IDENTIFIER Expressions • SEMI
 
     COMMA  shift, and go to state 61
     SEMI   shift, and go to state 96
 
 
+State 80
+
+    2 Expressions: Expressions • COMMA Expression
+   71 BreakStatement: BREAK IDENTIFIER Expressions • SEMI
+
+    COMMA  shift, and go to state 61
+    SEMI   shift, and go to state 97
+
+
 State 81
 
-   46 RuntimeExpression: RUNTIME LPAREN Expression • RPAREN
+   47 RuntimeExpression: RUNTIME LPAREN Expression • RPAREN
 
-    RPAREN  shift, and go to state 97
+    RPAREN  shift, and go to state 98
 
 
 State 82
 
-   72 LabelStatement: IDENTIFIER COLON SEMI •
+   73 LabelStatement: IDENTIFIER COLON SEMI •
 
-    $default  reduce using rule 72 (LabelStatement)
+    $default  reduce using rule 73 (LabelStatement)
 
 
 State 83
 
-   71 LabelStatement: IDENTIFIER COLON MatchExpression • SEMI
+   72 LabelStatement: IDENTIFIER COLON MatchExpression • SEMI
 
-    SEMI  shift, and go to state 98
+    SEMI  shift, and go to state 99
 
 
 State 84
@@ -1456,32 +1460,39 @@ State 84
 
 State 85
 
-    2 Expressions: Expressions • COMMA Expression
-   45 Call: NonAttributedExpression LPAREN Expressions • RPAREN
+   46 Call: NonAttributedExpression LPAREN RPAREN •
 
-    COMMA   shift, and go to state 61
-    RPAREN  shift, and go to state 99
+    $default  reduce using rule 46 (Call)
 
 
 State 86
 
-   54 Identifier: Identifier DOT IDENTIFIER •
+    2 Expressions: Expressions • COMMA Expression
+   45 Call: NonAttributedExpression LPAREN Expressions • RPAREN
 
-    $default  reduce using rule 54 (Identifier)
+    COMMA   shift, and go to state 61
+    RPAREN  shift, and go to state 100
 
 
 State 87
 
-    2 Expressions: Expressions • COMMA Expression
-   65 AssignmentStatement: AssignmentTarget EQ Expressions • SEMI
+   55 Identifier: Identifier DOT IDENTIFIER •
 
-    COMMA  shift, and go to state 61
-    SEMI   shift, and go to state 100
+    $default  reduce using rule 55 (Identifier)
 
 
 State 88
 
-   75 TypeAttribute: COLON • Expression
+    2 Expressions: Expressions • COMMA Expression
+   66 AssignmentStatement: AssignmentTarget EQ Expressions • SEMI
+
+    COMMA  shift, and go to state 61
+    SEMI   shift, and go to state 101
+
+
+State 89
+
+   76 TypeAttribute: COLON • Expression
 
     LBRACE      shift, and go to state 1
     LPAREN      shift, and go to state 2
@@ -1504,7 +1515,7 @@ State 88
 
     NonAttributedExpression  go to state 24
     WrappedExpressions       go to state 25
-    Expression               go to state 101
+    Expression               go to state 102
     Block                    go to state 27
     MatchExpression          go to state 29
     Function                 go to state 30
@@ -1518,37 +1529,37 @@ State 88
     AttributedExpression     go to state 46
 
 
-State 89
-
-   66 AssignmentTarget: AccessAttribute IDENTIFIER TypeAttribute •
-
-    $default  reduce using rule 66 (AssignmentTarget)
-
-
 State 90
 
-   25 MatchExpression: MATCH LPAREN Expression RPAREN • LBRACE MatchCases RBRACE
+   67 AssignmentTarget: AccessAttribute IDENTIFIER TypeAttribute •
 
-    LBRACE  shift, and go to state 102
+    $default  reduce using rule 67 (AssignmentTarget)
 
 
 State 91
 
-   29 Function: FUNCTION LPAREN FunctionParametersOptional RPAREN • FunctionAttributesOptional FunctionBody PERCENT
+   25 MatchExpression: MATCH LPAREN Expression RPAREN • LBRACE MatchCases RBRACE
 
-    EXTERNAL  shift, and go to state 103
-    INTERNAL  shift, and go to state 104
-
-    $default  reduce using rule 36 (FunctionAttributesOptional)
-
-    FunctionAttributesOptional  go to state 105
-    FunctionAttributes          go to state 106
-    FunctionAttribute           go to state 107
-    FunctionExternalAttribute   go to state 108
-    FunctionInternalAttribute   go to state 109
+    LBRACE  shift, and go to state 103
 
 
 State 92
+
+   29 Function: FUNCTION LPAREN FunctionParametersOptional RPAREN • FunctionAttributesOptional FunctionBody PERCENT
+
+    EXTERNAL  shift, and go to state 104
+    INTERNAL  shift, and go to state 105
+
+    $default  reduce using rule 36 (FunctionAttributesOptional)
+
+    FunctionAttributesOptional  go to state 106
+    FunctionAttributes          go to state 107
+    FunctionAttribute           go to state 108
+    FunctionExternalAttribute   go to state 109
+    FunctionInternalAttribute   go to state 110
+
+
+State 93
 
    32 FunctionParameters: FunctionParameters COMMA • FunctionParameter
 
@@ -1556,171 +1567,171 @@ State 92
     OUT    shift, and go to state 8
     INOUT  shift, and go to state 9
 
-    FunctionParameter  go to state 110
+    FunctionParameter  go to state 111
     AccessAttribute    go to state 77
-
-
-State 93
-
-   34 FunctionParameter: AccessAttribute IDENTIFIER • TypeAttribute
-
-    COLON  shift, and go to state 88
-
-    TypeAttribute  go to state 111
 
 
 State 94
 
-   56 Type: TYPE LPAREN Expression RPAREN • LBRACE TypeEntries RBRACE
+   34 FunctionParameter: AccessAttribute IDENTIFIER • TypeAttribute
 
-    LBRACE  shift, and go to state 112
+    COLON  shift, and go to state 89
+
+    TypeAttribute  go to state 112
 
 
 State 95
 
-   69 ContinueStatement: CONTINUE IDENTIFIER Expressions SEMI •
+   57 Type: TYPE LPAREN Expression RPAREN • LBRACE TypeEntries RBRACE
 
-    $default  reduce using rule 69 (ContinueStatement)
+    LBRACE  shift, and go to state 113
 
 
 State 96
 
-   70 BreakStatement: BREAK IDENTIFIER Expressions SEMI •
+   70 ContinueStatement: CONTINUE IDENTIFIER Expressions SEMI •
 
-    $default  reduce using rule 70 (BreakStatement)
+    $default  reduce using rule 70 (ContinueStatement)
 
 
 State 97
 
-   46 RuntimeExpression: RUNTIME LPAREN Expression RPAREN •
+   71 BreakStatement: BREAK IDENTIFIER Expressions SEMI •
 
-    $default  reduce using rule 46 (RuntimeExpression)
+    $default  reduce using rule 71 (BreakStatement)
 
 
 State 98
 
-   71 LabelStatement: IDENTIFIER COLON MatchExpression SEMI •
+   47 RuntimeExpression: RUNTIME LPAREN Expression RPAREN •
 
-    $default  reduce using rule 71 (LabelStatement)
+    $default  reduce using rule 47 (RuntimeExpression)
 
 
 State 99
+
+   72 LabelStatement: IDENTIFIER COLON MatchExpression SEMI •
+
+    $default  reduce using rule 72 (LabelStatement)
+
+
+State 100
 
    45 Call: NonAttributedExpression LPAREN Expressions RPAREN •
 
     $default  reduce using rule 45 (Call)
 
 
-State 100
-
-   65 AssignmentStatement: AssignmentTarget EQ Expressions SEMI •
-
-    $default  reduce using rule 65 (AssignmentStatement)
-
-
 State 101
 
-   75 TypeAttribute: COLON Expression •
+   66 AssignmentStatement: AssignmentTarget EQ Expressions SEMI •
 
-    $default  reduce using rule 75 (TypeAttribute)
+    $default  reduce using rule 66 (AssignmentStatement)
 
 
 State 102
 
-   25 MatchExpression: MATCH LPAREN Expression RPAREN LBRACE • MatchCases RBRACE
+   76 TypeAttribute: COLON Expression •
 
-    CASE  shift, and go to state 113
-
-    MatchCases  go to state 114
-    MatchCase   go to state 115
+    $default  reduce using rule 76 (TypeAttribute)
 
 
 State 103
 
-   41 FunctionExternalAttribute: EXTERNAL • LPAREN Expressions RPAREN
+   25 MatchExpression: MATCH LPAREN Expression RPAREN LBRACE • MatchCases RBRACE
 
-    LPAREN  shift, and go to state 116
+    CASE  shift, and go to state 114
+
+    MatchCases  go to state 115
+    MatchCase   go to state 116
 
 
 State 104
 
-   42 FunctionInternalAttribute: INTERNAL • LPAREN Expressions RPAREN
+   41 FunctionExternalAttribute: EXTERNAL • LPAREN Expressions RPAREN
 
     LPAREN  shift, and go to state 117
 
 
 State 105
 
-   29 Function: FUNCTION LPAREN FunctionParametersOptional RPAREN FunctionAttributesOptional • FunctionBody PERCENT
+   42 FunctionInternalAttribute: INTERNAL • LPAREN Expressions RPAREN
 
-    COLON  shift, and go to state 118
-
-    $default  reduce using rule 44 (FunctionBody)
-
-    FunctionBody  go to state 119
+    LPAREN  shift, and go to state 118
 
 
 State 106
 
-   35 FunctionAttributesOptional: FunctionAttributes •
-   37 FunctionAttributes: FunctionAttributes • FunctionAttribute
+   29 Function: FUNCTION LPAREN FunctionParametersOptional RPAREN FunctionAttributesOptional • FunctionBody PERCENT
 
-    EXTERNAL  shift, and go to state 103
-    INTERNAL  shift, and go to state 104
+    COLON  shift, and go to state 119
 
-    $default  reduce using rule 35 (FunctionAttributesOptional)
+    $default  reduce using rule 44 (FunctionBody)
 
-    FunctionAttribute          go to state 120
-    FunctionExternalAttribute  go to state 108
-    FunctionInternalAttribute  go to state 109
+    FunctionBody  go to state 120
 
 
 State 107
+
+   35 FunctionAttributesOptional: FunctionAttributes •
+   37 FunctionAttributes: FunctionAttributes • FunctionAttribute
+
+    EXTERNAL  shift, and go to state 104
+    INTERNAL  shift, and go to state 105
+
+    $default  reduce using rule 35 (FunctionAttributesOptional)
+
+    FunctionAttribute          go to state 121
+    FunctionExternalAttribute  go to state 109
+    FunctionInternalAttribute  go to state 110
+
+
+State 108
 
    38 FunctionAttributes: FunctionAttribute •
 
     $default  reduce using rule 38 (FunctionAttributes)
 
 
-State 108
+State 109
 
    39 FunctionAttribute: FunctionExternalAttribute •
 
     $default  reduce using rule 39 (FunctionAttribute)
 
 
-State 109
+State 110
 
    40 FunctionAttribute: FunctionInternalAttribute •
 
     $default  reduce using rule 40 (FunctionAttribute)
 
 
-State 110
+State 111
 
    32 FunctionParameters: FunctionParameters COMMA FunctionParameter •
 
     $default  reduce using rule 32 (FunctionParameters)
 
 
-State 111
+State 112
 
    34 FunctionParameter: AccessAttribute IDENTIFIER TypeAttribute •
 
     $default  reduce using rule 34 (FunctionParameter)
 
 
-State 112
-
-   56 Type: TYPE LPAREN Expression RPAREN LBRACE • TypeEntries RBRACE
-
-    IDENTIFIER  shift, and go to state 121
-
-    TypeEntries  go to state 122
-    TypeEntry    go to state 123
-
-
 State 113
+
+   57 Type: TYPE LPAREN Expression RPAREN LBRACE • TypeEntries RBRACE
+
+    IDENTIFIER  shift, and go to state 122
+
+    TypeEntries  go to state 123
+    TypeEntry    go to state 124
+
+
+State 114
 
    28 MatchCase: CASE • Expression COLON Expressions SEMI
 
@@ -1745,7 +1756,7 @@ State 113
 
     NonAttributedExpression  go to state 24
     WrappedExpressions       go to state 25
-    Expression               go to state 124
+    Expression               go to state 125
     Block                    go to state 27
     MatchExpression          go to state 29
     Function                 go to state 30
@@ -1759,67 +1770,27 @@ State 113
     AttributedExpression     go to state 46
 
 
-State 114
+State 115
 
    25 MatchExpression: MATCH LPAREN Expression RPAREN LBRACE MatchCases • RBRACE
    26 MatchCases: MatchCases • MatchCase
 
-    RBRACE  shift, and go to state 125
-    CASE    shift, and go to state 113
+    RBRACE  shift, and go to state 126
+    CASE    shift, and go to state 114
 
-    MatchCase  go to state 126
+    MatchCase  go to state 127
 
 
-State 115
+State 116
 
    27 MatchCases: MatchCase •
 
     $default  reduce using rule 27 (MatchCases)
 
 
-State 116
-
-   41 FunctionExternalAttribute: EXTERNAL LPAREN • Expressions RPAREN
-
-    LBRACE      shift, and go to state 1
-    LPAREN      shift, and go to state 2
-    MATCH       shift, and go to state 4
-    FUNCTION    shift, and go to state 5
-    TYPE        shift, and go to state 6
-    IN          shift, and go to state 7
-    OUT         shift, and go to state 8
-    INOUT       shift, and go to state 9
-    REF         shift, and go to state 10
-    PTR         shift, and go to state 11
-    RUNTIME     shift, and go to state 14
-    IDENTIFIER  shift, and go to state 48
-    STRING      shift, and go to state 16
-    INTEGER     shift, and go to state 17
-    FLOAT       shift, and go to state 18
-    CHAR        shift, and go to state 19
-    MACRO       shift, and go to state 20
-    NIL         shift, and go to state 21
-
-    Expressions              go to state 127
-    NonAttributedExpression  go to state 24
-    WrappedExpressions       go to state 25
-    Expression               go to state 26
-    Block                    go to state 27
-    MatchExpression          go to state 29
-    Function                 go to state 30
-    Call                     go to state 50
-    RuntimeExpression        go to state 32
-    Literal                  go to state 33
-    Identifier               go to state 51
-    Type                     go to state 35
-    AccessAttribute          go to state 52
-    PointerAttribute         go to state 45
-    AttributedExpression     go to state 46
-
-
 State 117
 
-   42 FunctionInternalAttribute: INTERNAL LPAREN • Expressions RPAREN
+   41 FunctionExternalAttribute: EXTERNAL LPAREN • Expressions RPAREN
 
     LBRACE      shift, and go to state 1
     LPAREN      shift, and go to state 2
@@ -1859,7 +1830,7 @@ State 117
 
 State 118
 
-   43 FunctionBody: COLON • Expressions
+   42 FunctionInternalAttribute: INTERNAL LPAREN • Expressions RPAREN
 
     LBRACE      shift, and go to state 1
     LPAREN      shift, and go to state 2
@@ -1899,88 +1870,128 @@ State 118
 
 State 119
 
-   29 Function: FUNCTION LPAREN FunctionParametersOptional RPAREN FunctionAttributesOptional FunctionBody • PERCENT
+   43 FunctionBody: COLON • Expressions
 
-    PERCENT  shift, and go to state 130
+    LBRACE      shift, and go to state 1
+    LPAREN      shift, and go to state 2
+    MATCH       shift, and go to state 4
+    FUNCTION    shift, and go to state 5
+    TYPE        shift, and go to state 6
+    IN          shift, and go to state 7
+    OUT         shift, and go to state 8
+    INOUT       shift, and go to state 9
+    REF         shift, and go to state 10
+    PTR         shift, and go to state 11
+    RUNTIME     shift, and go to state 14
+    IDENTIFIER  shift, and go to state 48
+    STRING      shift, and go to state 16
+    INTEGER     shift, and go to state 17
+    FLOAT       shift, and go to state 18
+    CHAR        shift, and go to state 19
+    MACRO       shift, and go to state 20
+    NIL         shift, and go to state 21
+
+    Expressions              go to state 130
+    NonAttributedExpression  go to state 24
+    WrappedExpressions       go to state 25
+    Expression               go to state 26
+    Block                    go to state 27
+    MatchExpression          go to state 29
+    Function                 go to state 30
+    Call                     go to state 50
+    RuntimeExpression        go to state 32
+    Literal                  go to state 33
+    Identifier               go to state 51
+    Type                     go to state 35
+    AccessAttribute          go to state 52
+    PointerAttribute         go to state 45
+    AttributedExpression     go to state 46
 
 
 State 120
+
+   29 Function: FUNCTION LPAREN FunctionParametersOptional RPAREN FunctionAttributesOptional FunctionBody • PERCENT
+
+    PERCENT  shift, and go to state 131
+
+
+State 121
 
    37 FunctionAttributes: FunctionAttributes FunctionAttribute •
 
     $default  reduce using rule 37 (FunctionAttributes)
 
 
-State 121
-
-   78 TypeEntry: IDENTIFIER • TypeAttributeOptional SEMI
-
-    COLON  shift, and go to state 88
-
-    $default  reduce using rule 74 (TypeAttributeOptional)
-
-    TypeAttributeOptional  go to state 131
-    TypeAttribute          go to state 132
-
-
 State 122
 
-   56 Type: TYPE LPAREN Expression RPAREN LBRACE TypeEntries • RBRACE
-   76 TypeEntries: TypeEntries • TypeEntry
+   79 TypeEntry: IDENTIFIER • TypeAttributeOptional SEMI
 
-    RBRACE      shift, and go to state 133
-    IDENTIFIER  shift, and go to state 121
+    COLON  shift, and go to state 89
 
-    TypeEntry  go to state 134
+    $default  reduce using rule 75 (TypeAttributeOptional)
+
+    TypeAttributeOptional  go to state 132
+    TypeAttribute          go to state 133
 
 
 State 123
 
-   77 TypeEntries: TypeEntry •
+   57 Type: TYPE LPAREN Expression RPAREN LBRACE TypeEntries • RBRACE
+   77 TypeEntries: TypeEntries • TypeEntry
 
-    $default  reduce using rule 77 (TypeEntries)
+    RBRACE      shift, and go to state 134
+    IDENTIFIER  shift, and go to state 122
+
+    TypeEntry  go to state 135
 
 
 State 124
 
-   28 MatchCase: CASE Expression • COLON Expressions SEMI
+   78 TypeEntries: TypeEntry •
 
-    COLON  shift, and go to state 135
+    $default  reduce using rule 78 (TypeEntries)
 
 
 State 125
+
+   28 MatchCase: CASE Expression • COLON Expressions SEMI
+
+    COLON  shift, and go to state 136
+
+
+State 126
 
    25 MatchExpression: MATCH LPAREN Expression RPAREN LBRACE MatchCases RBRACE •
 
     $default  reduce using rule 25 (MatchExpression)
 
 
-State 126
+State 127
 
    26 MatchCases: MatchCases MatchCase •
 
     $default  reduce using rule 26 (MatchCases)
 
 
-State 127
-
-    2 Expressions: Expressions • COMMA Expression
-   41 FunctionExternalAttribute: EXTERNAL LPAREN Expressions • RPAREN
-
-    COMMA   shift, and go to state 61
-    RPAREN  shift, and go to state 136
-
-
 State 128
 
     2 Expressions: Expressions • COMMA Expression
-   42 FunctionInternalAttribute: INTERNAL LPAREN Expressions • RPAREN
+   41 FunctionExternalAttribute: EXTERNAL LPAREN Expressions • RPAREN
 
     COMMA   shift, and go to state 61
     RPAREN  shift, and go to state 137
 
 
 State 129
+
+    2 Expressions: Expressions • COMMA Expression
+   42 FunctionInternalAttribute: INTERNAL LPAREN Expressions • RPAREN
+
+    COMMA   shift, and go to state 61
+    RPAREN  shift, and go to state 138
+
+
+State 130
 
     2 Expressions: Expressions • COMMA Expression
    43 FunctionBody: COLON Expressions •
@@ -1990,42 +2001,42 @@ State 129
     $default  reduce using rule 43 (FunctionBody)
 
 
-State 130
+State 131
 
    29 Function: FUNCTION LPAREN FunctionParametersOptional RPAREN FunctionAttributesOptional FunctionBody PERCENT •
 
     $default  reduce using rule 29 (Function)
 
 
-State 131
-
-   78 TypeEntry: IDENTIFIER TypeAttributeOptional • SEMI
-
-    SEMI  shift, and go to state 138
-
-
 State 132
 
-   73 TypeAttributeOptional: TypeAttribute •
+   79 TypeEntry: IDENTIFIER TypeAttributeOptional • SEMI
 
-    $default  reduce using rule 73 (TypeAttributeOptional)
+    SEMI  shift, and go to state 139
 
 
 State 133
 
-   56 Type: TYPE LPAREN Expression RPAREN LBRACE TypeEntries RBRACE •
+   74 TypeAttributeOptional: TypeAttribute •
 
-    $default  reduce using rule 56 (Type)
+    $default  reduce using rule 74 (TypeAttributeOptional)
 
 
 State 134
 
-   76 TypeEntries: TypeEntries TypeEntry •
+   57 Type: TYPE LPAREN Expression RPAREN LBRACE TypeEntries RBRACE •
 
-    $default  reduce using rule 76 (TypeEntries)
+    $default  reduce using rule 57 (Type)
 
 
 State 135
+
+   77 TypeEntries: TypeEntries TypeEntry •
+
+    $default  reduce using rule 77 (TypeEntries)
+
+
+State 136
 
    28 MatchCase: CASE Expression COLON • Expressions SEMI
 
@@ -2048,7 +2059,7 @@ State 135
     MACRO       shift, and go to state 20
     NIL         shift, and go to state 21
 
-    Expressions              go to state 139
+    Expressions              go to state 140
     NonAttributedExpression  go to state 24
     WrappedExpressions       go to state 25
     Expression               go to state 26
@@ -2065,37 +2076,37 @@ State 135
     AttributedExpression     go to state 46
 
 
-State 136
+State 137
 
    41 FunctionExternalAttribute: EXTERNAL LPAREN Expressions RPAREN •
 
     $default  reduce using rule 41 (FunctionExternalAttribute)
 
 
-State 137
+State 138
 
    42 FunctionInternalAttribute: INTERNAL LPAREN Expressions RPAREN •
 
     $default  reduce using rule 42 (FunctionInternalAttribute)
 
 
-State 138
-
-   78 TypeEntry: IDENTIFIER TypeAttributeOptional SEMI •
-
-    $default  reduce using rule 78 (TypeEntry)
-
-
 State 139
+
+   79 TypeEntry: IDENTIFIER TypeAttributeOptional SEMI •
+
+    $default  reduce using rule 79 (TypeEntry)
+
+
+State 140
 
     2 Expressions: Expressions • COMMA Expression
    28 MatchCase: CASE Expression COLON Expressions • SEMI
 
     COMMA  shift, and go to state 61
-    SEMI   shift, and go to state 140
+    SEMI   shift, and go to state 141
 
 
-State 140
+State 141
 
    28 MatchCase: CASE Expression COLON Expressions SEMI •
 

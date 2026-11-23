@@ -23,4 +23,5 @@ pub const Pool = @import("Pool.zig").Pool;
 pub const Module = @import("Module.zig");
 pub const Parser = @import("Parser.zig");
 
+pub const format = @import("format.zig").format;
 pub const PossibleHandle = u64;
